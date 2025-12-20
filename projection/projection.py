@@ -19,7 +19,7 @@ class Projection():
         self.Q_embed = EmbeddingSynapse("Q_embed", vocab_size=vocab_size, seq_len=seq_len,
                                 embed_dim=n_embed, batch_size= batch_size,
                                 pos_learnable=pos_learnable, eta=eta,
-                                optim_type=optim_type, key=subkeys[5])
+                                 optim_type=optim_type, key=subkeys[5])
                 
         self.blocks=[]
         for k in range(n_blocks):
