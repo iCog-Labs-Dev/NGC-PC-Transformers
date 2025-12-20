@@ -247,7 +247,7 @@ class EmbeddingSynapse(JaxComponent):
             "outputs":
                 {"outputs": "Combined embeddings (batch_size, seq_len, embed_dim)"},
         }
-        hyperparams = {
+        hyperparams = { 
             "vocab_size": "Size of vocabulary",
             "seq_len": "Maximum sequence length", 
             "embed_dim": "Dimensionality of embeddings",

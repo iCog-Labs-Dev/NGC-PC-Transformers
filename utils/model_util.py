@@ -4,7 +4,7 @@ from ngclearn import Compartment
 from ngclearn import compilable
 
 class ReshapeComponent(JaxComponent):
-    """Component that reshapes tensors for ngc-learn wiring"""
+    """Component that reshapes  tensors for ngc-learn wiring"""
     
     def __init__(self, name, input_shape, output_shape, **kwargs):
         super().__init__(name, **kwargs)
