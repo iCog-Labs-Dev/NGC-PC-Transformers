@@ -1,5 +1,5 @@
 from ngclearn.components import GaussianErrorCell as ErrorCell, RateCell, HebbianSynapse, StaticSynapse
-import ngclearn.utils.weight_distribution as dist
+from ngclearn.utils.distribution_generator import DistributionGenerator as dist
 from jax import numpy as jnp, random, jit
 import jax
 from config import Config as config
@@ -64,4 +64,4 @@ class Attention:
                                   batch_size=batch_size * seq_len) # shape=(seq_len, n_embed, 1),
         
         self.E_attn = StaticSynapse(f"{prefix}E_attn", shape=(n_embed, n_embed),
-                        weight_init=dist.uniform(amin=wlb, amax=wub), bias_init= dist.constant(value=0.), key=subkeys[4])
+                        weight_init=dist.uniform(low=wlb, high=wub),  key=subkeys[4])

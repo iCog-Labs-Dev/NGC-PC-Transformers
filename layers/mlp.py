@@ -1,8 +1,7 @@
 import jax
-from ngclearn.utils import JaxProcess
 from jax import numpy as jnp, random, jit
 from ngclearn.components import GaussianErrorCell as ErrorCell, RateCell, HebbianSynapse, StaticSynapse
-import ngclearn.utils.weight_distribution as dist
+from ngclearn.utils.distribution_generator import DistributionGenerator as dist
 from config import Config as config
 
 class MLP:
@@ -32,8 +31,8 @@ class MLP:
                                   batch_size=batch_size * seq_len)
         
         
-        self.E_mlp1 = StaticSynapse(f"{prefix}E_mlp1", shape=(4 * n_embed,n_embed), weight_init=dist.uniform(amin=wlb, amax=wub), bias_init= dist.constant(value=0.), key=subkeys[4])
-        self.E_mlp = StaticSynapse(f"{prefix}E_mlp", shape=(n_embed, 4 * n_embed), weight_init=dist.uniform(amin=wlb, amax=wub), bias_init= dist.constant(value=0.), key=subkeys[4])
+        self.E_mlp1 = StaticSynapse(f"{prefix}E_mlp1", shape=(4 * n_embed,n_embed), weight_init=dist.uniform(low=wlb, high=wub), key=subkeys[4])
+        self.E_mlp = StaticSynapse(f"{prefix}E_mlp", shape=(n_embed, 4 * n_embed), weight_init=dist.uniform(low=wlb, high=wub), key=subkeys[4])
     def get_components(self):
         """Return all components for easy access"""
         return {
