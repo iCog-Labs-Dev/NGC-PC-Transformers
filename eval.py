@@ -85,7 +85,7 @@ if __name__ == "__main__":
         dropout_rate=config.dropout_rate,
         exp_dir="exp",
         model_name="ngc_transformer",
-        loadDir="exp",
+        loadDir="exp",  
         pos_learnable=config.pos_learnable,
         optim_type=config.optim_type,
         wub=config.wub,
