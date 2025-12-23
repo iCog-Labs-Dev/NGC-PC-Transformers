@@ -91,9 +91,6 @@ if __name__ == "__main__":
         wub=config.wub,
         wlb=config.wlb,
     )
-
-
-
     data_loader = DataLoader(seq_len=config.seq_len, batch_size=config.batch_size)
     _, _, test_loader = data_loader.load_and_prepare_data()
 
