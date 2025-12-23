@@ -84,7 +84,7 @@ if __name__ == "__main__":
         eta=config.eta,
         dropout_rate=config.dropout_rate,
         exp_dir="exp",
-        model_name="ngc transformer",
+        model_name="ngc_transformer",
         loadDir=None,
         pos_learnable=config.pos_learnable,
         optim_type=config.optim_type,
