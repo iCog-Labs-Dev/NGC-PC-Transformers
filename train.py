@@ -80,7 +80,7 @@ def main():
         dev_ce, dev_ppl = eval_model(model, valid_loader, vocab_size)
         print(f"Iter {i} Summary: CE = {dev_ce:.4f}, PPL = {dev_ppl:.4f}, Avg EFE = {avg_train_EFE:.4f}")
         if  i == (num_iter-1):
-          model.save_to_disk(params_only=True) # save final state of model to disk
+          model.save_to_disk(params_only=False) # save final state of model to disk
 
    
 if __name__ == "__main__":
