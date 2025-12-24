@@ -186,3 +186,6 @@ def run_tuning():
         for key, value in study.best_trial.params.items():
             print(f"  {key}: {value}")
         print("="*50)
+
+if __name__ == "__main__":
+    run_tuning()
