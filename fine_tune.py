@@ -1,8 +1,13 @@
 import alogos as al
 import jax.numpy as jnp
-from jax import random
+from jax import random, clear_caches
 import numpy as np
 import sys
+import gc  # Garbage Collector for memory cleanup
+
+# Set JAX to not pre-allocate 100% of VRAM immediately
+import os
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
 # --- Project Imports ---
 try:
@@ -11,19 +16,19 @@ try:
     from data_preprocess.data_loader import DataLoader
     from eval import eval_model
 except ImportError as e:
-    print(f"Import Error: {e}")
+    print(f"Import Error: {e}. Ensure script is in the project root.")
     sys.exit(1)
 
 # ==========================================
-# 1. FIXED PARAMETERS
+# 1. FIXED PARAMETERS (The "Safe" Zone)
 # ==========================================
-FIXED_BS = 12
-FIXED_BLOCK = 16
-FIXED_VOCAB = 3000
-FIXED_EMBED = 64
+FIXED_BS = 8        # Lowered to prevent OOM
+FIXED_BLOCK = 16    
+FIXED_VOCAB = 5000  
+FIXED_EMBED = 64    
 
 # ==========================================
-# 2. FIXED GRAMMAR (Corrected eta prefix)
+# 2. CORRECTED GRAMMAR
 # ==========================================
 bnf_text = """
 <hparams>      ::= <heads> "," <layers> "," <dropout> "," <eta> "," <t_step> "," <act> "," <w_init>
@@ -40,65 +45,112 @@ bnf_text = """
 # ==========================================
 # 3. GLOBAL DATA LOADING
 # ==========================================
+print("--- Loading Dataset ---")
 data_loader = DataLoader(seq_len=FIXED_BLOCK, batch_size=FIXED_BS)
 train_loader, valid_loader, _ = data_loader.load_and_prepare_data()
 
 # ==========================================
-# 4. OBJECTIVE FUNCTION
+# 4. OBJECTIVE FUNCTION (With Forced Cleanup)
 # ==========================================
 def objective_function(phenotype_string):
+    # Clean the input string from alogos
     clean_string = phenotype_string.replace('"', '').replace(' ', '')
     print(f"\n[Testing Config]: {clean_string}")
     
+    model = None  # Initialize for finally block cleanup
+    
     try:
-        # Parse params
+        # Parse params into dictionary
         params = {p.split('=')[0]: p.split('=')[1] for p in clean_string.split(',')}
         
-        # Convert types
-        p_layers = int(params['n_layers'])
-        p_heads = int(params['n_heads'])
-        p_dropout = float(params['dropout_rate'])
-        p_eta = float(params['eta'])
-        p_T = int(params['T'])
-        p_act = params['act_fx']
-        p_w = float(params['w_val'])
-
+        # Initialize NGCTransformer
         dkey = random.PRNGKey(42)
         model = NGCTransformer(
-            dkey, batch_size=FIXED_BS, seq_len=FIXED_BLOCK, n_embed=FIXED_EMBED,
-            vocab_size=FIXED_VOCAB, n_layers=p_layers, n_heads=p_heads,
-            T=p_T, dt=1., tau_m=10.0, act_fx=p_act, eta=p_eta,
-            dropout_rate=p_dropout, exp_dir="exp",
-            wub=p_w, wlb=-p_w, model_name="ngc_transformer"
+            dkey, 
+            batch_size=FIXED_BS, 
+            seq_len=FIXED_BLOCK, 
+            n_embed=FIXED_EMBED,
+            vocab_size=FIXED_VOCAB, 
+            n_layers=int(params['n_layers']), 
+            n_heads=int(params['n_heads']),
+            T=int(params['T']), 
+            dt=1.0, 
+            tau_m=10.0, 
+            act_fx=params['act_fx'], 
+            eta=float(params['eta']),
+            dropout_rate=float(params['dropout_rate']), 
+            exp_dir="exp_evo",
+            wub=float(params['w_val']), 
+            wlb=-float(params['w_val']), 
+            model_name="temp_model"
         )
 
+        # Small training burst to evaluate performance
         train_iter = iter(train_loader)
-        for _ in range(10): # Reduced steps for speed
-            batch = next(train_iter)
+        for _ in range(10):
+            try:
+                batch = next(train_iter)
+            except StopIteration:
+                train_iter = iter(train_loader)
+                batch = next(train_iter)
+
             inputs = batch[0][1][:FIXED_BS, :FIXED_BLOCK]
             targets = batch[1][1][:FIXED_BS, :FIXED_BLOCK]
-            
-            # The model is crashing on label dimensions. 
-            # We ensure targets_flat matches the expected output shape
             targets_flat = jnp.eye(FIXED_VOCAB)[targets].reshape(-1, FIXED_VOCAB)
             
             model.process(obs=inputs, lab=targets_flat, adapt_synapses=True)
 
+        # Evaluation
         val_ce, _ = eval_model(model, valid_loader, FIXED_VOCAB)
-        return float(val_ce) if not (np.isnan(val_ce) or np.isinf(val_ce)) else 2000.0
+        
+        if np.isnan(val_ce) or np.isinf(val_ce):
+            return 2000.0
+            
+        print(f"   >>> Result CE: {val_ce:.4f}")
+        return float(val_ce)
 
     except Exception as e:
         print(f"   [!] Individual Failed: {e}")
         return 5000.0
 
+    finally:
+        # --- CRITICAL MEMORY CLEANUP ---
+        if model is not None:
+            del model
+        
+        # Clear JAX compilation cache (XLA)
+        clear_caches()
+        
+        # Force Python's Garbage Collector
+        gc.collect()
+        # -------------------------------
+
 # ==========================================
-# 5. MAIN
+# 5. EVOLUTIONARY RUN
 # ==========================================
 def main():
     grammar = al.Grammar(bnf_text=bnf_text)
-    ea = al.EvolutionaryAlgorithm(grammar, objective_function, 'min', population_size=8, max_generations=3)
+    
+    # Keeping population small to save memory and time
+    ea = al.EvolutionaryAlgorithm(
+        grammar, 
+        objective_function, 
+        'min', 
+        population_size=8, 
+        max_generations=3
+    )
+
+    print("\n" + "="*40)
+    print("STARTING MEMORY-SAFE SEARCH")
+    print("="*40)
+    
     best_ind = ea.run()
-    print(f"\nBEST CONFIG: {best_ind.phenotype}")
+
+    print("\n" + "="*40)
+    print("BEST CONFIGURATION")
+    print("="*40)
+    print(f"Params: {best_ind.phenotype}")
+    print(f"Fitness: {best_ind.fitness:.4f}")
 
 if __name__ == "__main__":
     main()
