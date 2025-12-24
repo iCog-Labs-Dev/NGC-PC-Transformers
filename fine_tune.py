@@ -6,10 +6,8 @@ import sys
 import gc
 import os
 
-# Prevent JAX from hogging all VRAM immediately
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
-# --- Project Imports ---
 try:
     from model import NGCTransformer
     from ngclearn.utils.metric_utils import measure_CatNLL
@@ -19,17 +17,11 @@ except ImportError as e:
     print(f"Import Error: {e}. Check project path.")
     sys.exit(1)
 
-# ==========================================
-# 1. FIXED PARAMETERS
-# ==========================================
+
 FIXED_BS = 8
 FIXED_BLOCK = 16
 FIXED_VOCAB = 5000
 
-# ==========================================
-# 2. UPDATED GRAMMAR (n_embed & dropout 0.5)
-# ==========================================
-# Added n_embed and expanded n_heads/dropout as requested
 bnf_text = """
 <hparams>      ::= <embed> "," <heads> "," <layers> "," <dropout> "," <eta> "," <t_step> "," <act> "," <w_init>
 
@@ -43,15 +35,10 @@ bnf_text = """
 <w_init>       ::= "w_val=0.01" | "w_val=0.05" | "w_val=0.1"
 """
 
-# ==========================================
-# 3. GLOBAL DATA LOADING
-# ==========================================
+
 data_loader = DataLoader(seq_len=FIXED_BLOCK, batch_size=FIXED_BS)
 train_loader, valid_loader, _ = data_loader.load_and_prepare_data()
 
-# ==========================================
-# 4. OBJECTIVE FUNCTION (Memory Safe)
-# ==========================================
 def objective_function(phenotype_string):
     clean_string = phenotype_string.replace('"', '').replace(' ', '')
     print(f"\n[Testing Config]: {clean_string}")
@@ -118,9 +105,6 @@ def objective_function(phenotype_string):
         clear_caches()
         gc.collect()
 
-# ==========================================
-# 5. MAIN
-# ==========================================
 def main():
     grammar = al.Grammar(bnf_text=bnf_text)
     ea = al.EvolutionaryAlgorithm(
