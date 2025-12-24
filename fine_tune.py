@@ -23,21 +23,21 @@ bnf_text = """
 <hparams>      ::= <bs> "," <embed> "," <layers> "," <dropout> "," <block> "," <vocab> "," <eta> "," <t_step> "," <act> "," <w_init>
 
 <bs>           ::= "batch_size=" <bs_v>
-<bs_v>         ::= "16" | "32" | "64"
+<bs_v>         ::= "32" | "64"
 
-<embed>        ::= "n_embed=128,n_heads=4" | "n_embed=128,n_heads=8" | "n_embed=256,n_heads=4" | "n_embed=256,n_heads=8" | "n_embed=512,n_heads=8"
+<embed>        ::= "n_embed=128,n_heads=4" | "n_embed=128,n_heads=8" | "n_embed=256,n_heads=4" | "n_embed=256,n_heads=8"
 
 <layers>       ::= "n_layers=" <l_v>
-<l_v>          ::= "2" | "3" | "4" | "6"
+<l_v>          ::= "2" | "4" | "6"
 
 <dropout>      ::= "dropout_rate=" <d_v>
-<d_v>          ::= "0.0" | "0.1" | "0.3"
+<d_v>          ::= "0.0" | "0.1"
 
 <block>        ::= "block_size=" <bl_v>
-<bl_v>         ::= "32" | "64" | "128"
+<bl_v>         ::= "48" | "96"
 
 <vocab>        ::= "vocab_size=" <v_v>
-<v_v>          ::= "1000" | "5000" | "10000"
+<v_v>          ::= "1000" | "5000"
 
 <eta>          ::= "eta=" <e_v>
 <e_v>          ::= "0.01" | "0.005" | "0.001"
@@ -49,7 +49,7 @@ bnf_text = """
 <a_v>          ::= "identity" | "lrelu" | "tanh"
 
 <w_init>       ::= "w_val=" <w_v>
-<w_v>          ::= "0.01" | "0.05" | "0.1" | "0.2"
+<w_v>          ::= "0.01" | "0.05" | "0.1"
 """
 
 # ==========================================
