@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 from jax import random
 import optuna
-
+import jax.extend
 # --- GPU MEMORY CONFIGURATION ---
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".80"
 os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
@@ -161,9 +161,13 @@ def objective(trial):
         cleanup_memory()
 
 def run_tuning():
-    # Verify hardware
-    device = jax.lib.xla_bridge.get_backend().platform
-    logger.info(f"JAX Backend: {device.upper()}")
+    # Modern way to check the backend platform (GPU/CPU/TPU)
+    try:
+        # This checks the primary device platform
+        device_platform = jax.devices()[0].platform.upper()
+        logger.info(f"JAX Backend: {device_platform}")
+    except Exception:
+        logger.warning("Could not explicitly determine JAX backend; proceeding with default.")
 
     # Initialize Optuna Study
     study = optuna.create_study(
@@ -171,7 +175,7 @@ def run_tuning():
         pruner=optuna.pruners.MedianPruner(n_startup_trials=2, n_warmup_steps=0)
     )
     
-    # Run optimization for 10 trials (increase this for better results)
+    # Run optimization
     study.optimize(objective, n_trials=10)
     
     if study.best_trial:
@@ -182,6 +186,3 @@ def run_tuning():
         for key, value in study.best_trial.params.items():
             print(f"  {key}: {value}")
         print("="*50)
-
-if __name__ == "__main__":
-    run_tuning()
