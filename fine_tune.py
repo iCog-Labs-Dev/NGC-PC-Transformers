@@ -17,10 +17,10 @@ except ImportError as e:
 # ==========================================
 # 1. FIXED PARAMETERS
 # ==========================================
-FIXED_BS = 64
-FIXED_BLOCK = 128
-FIXED_VOCAB = 11710 
-FIXED_EMBED = 128
+FIXED_BS = 12
+FIXED_BLOCK = 16
+FIXED_VOCAB = 3000
+FIXED_EMBED = 64
 
 # ==========================================
 # 2. FIXED GRAMMAR (Corrected eta prefix)
