@@ -24,7 +24,7 @@ except ImportError as e:
 # ==========================================
 FIXED_BS = 8        # Lowered to prevent OOM
 FIXED_BLOCK = 16    
-FIXED_VOCAB = 5000  
+FIXED_VOCAB = 2000 
 FIXED_EMBED = 64    
 
 # ==========================================
