@@ -5,7 +5,9 @@ import numpy as np
 import sys
 import gc
 import os
+from config import Config as config
 
+# Prevent JAX memory pre-allocation issues
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
 try:
@@ -17,10 +19,12 @@ except ImportError as e:
     print(f"Import Error: {e}. Check project path.")
     sys.exit(1)
 
-
-FIXED_BS = 8
-FIXED_BLOCK = 16
-FIXED_VOCAB = 5000
+# ==========================================
+# 1. PARAMETERS FROM CONFIG
+# ==========================================
+FIXED_BS = config.batch_size
+FIXED_BLOCK = config.seq_len
+FIXED_VOCAB = config.vocab_size
 
 bnf_text = """
 <hparams>      ::= <embed> "," <heads> "," <layers> "," <dropout> "," <eta> "," <t_step> "," <act> "," <w_init>
@@ -35,10 +39,13 @@ bnf_text = """
 <w_init>       ::= "w_val=0.01" | "w_val=0.05" | "w_val=0.1"
 """
 
-
+# Initialize Data
 data_loader = DataLoader(seq_len=FIXED_BLOCK, batch_size=FIXED_BS)
 train_loader, valid_loader, _ = data_loader.load_and_prepare_data()
 
+# ==========================================
+# 2. OBJECTIVE FUNCTION
+# ==========================================
 def objective_function(phenotype_string):
     clean_string = phenotype_string.replace('"', '').replace(' ', '')
     print(f"\n[Testing Config]: {clean_string}")
@@ -46,7 +53,7 @@ def objective_function(phenotype_string):
     model = None
     
     try:
-        # Parse all params from the string
+        # Parse params
         params = {p.split('=')[0]: p.split('=')[1] for p in clean_string.split(',')}
         
         dkey = random.PRNGKey(42)
@@ -54,23 +61,25 @@ def objective_function(phenotype_string):
             dkey, 
             batch_size=FIXED_BS, 
             seq_len=FIXED_BLOCK, 
-            n_embed=int(params['n_embed']), # Now searchable
+            n_embed=int(params['n_embed']),
             vocab_size=FIXED_VOCAB, 
             n_layers=int(params['n_layers']), 
             n_heads=int(params['n_heads']),
             T=int(params['T']), 
             dt=1.0, 
-            tau_m=10.0, 
+            tau_m=config.tau_m, 
             act_fx=params['act_fx'], 
             eta=float(params['eta']),
             dropout_rate=float(params['dropout_rate']), 
-            exp_dir="exp_evo",
+            exp_dir="exp",
+            model_name="ngc_transformer",
+            pos_learnable=config.pos_learnable,
+            optim_type=config.optim_type,
             wub=float(params['w_val']), 
             wlb=-float(params['w_val']), 
-            model_name="tuning_model"
         )
 
-        # Training process
+        # Fast training steps
         train_iter = iter(train_loader)
         for _ in range(10):
             try:
@@ -85,13 +94,16 @@ def objective_function(phenotype_string):
             
             model.process(obs=inputs, lab=targets_flat, adapt_synapses=True)
 
-        # Evaluate fitness
+        # --- Evaluation (CE and PPL) ---
         val_ce, _ = eval_model(model, valid_loader, FIXED_VOCAB)
         
         if np.isnan(val_ce) or np.isinf(val_ce):
             return 2000.0
+        
+        # Calculate Perplexity
+        val_ppl = np.exp(val_ce)
             
-        print(f"   >>> Result CE: {val_ce:.4f}")
+        print(f"   >>> Result CE: {val_ce:.4f} | PPL: {val_ppl:.4f}")
         return float(val_ce)
 
     except Exception as e:
@@ -99,12 +111,15 @@ def objective_function(phenotype_string):
         return 5000.0
 
     finally:
-        # Memory cleanup
+        # Explicit Memory Cleanup for JAX
         if model is not None:
             del model
         clear_caches()
         gc.collect()
 
+# ==========================================
+# 3. MAIN SEARCH LOOP
+# ==========================================
 def main():
     grammar = al.Grammar(bnf_text=bnf_text)
     ea = al.EvolutionaryAlgorithm(
@@ -116,8 +131,8 @@ def main():
     )
 
     print("\n" + "="*40)
-    print("STARTING UPDATED SEARCH")
-    print(f"Fixed: BS={FIXED_BS}, Seq={FIXED_BLOCK}, Vocab={FIXED_VOCAB}")
+    print("STARTING SEARCH (CE + PPL TRACKING)")
+    print(f"Fixed Params: BS={FIXED_BS}, Seq={FIXED_BLOCK}, Vocab={FIXED_VOCAB}")
     print("="*40)
     
     best_ind = ea.run()
@@ -126,7 +141,8 @@ def main():
     print("BEST CONFIG FOUND")
     print("="*40)
     print(f"Params: {best_ind.phenotype}")
-    print(f"Loss: {best_ind.fitness:.4f}")
+    print(f"Best CE: {best_ind.fitness:.4f}")
+    print(f"Best PPL: {np.exp(best_ind.fitness):.4f}")
 
 if __name__ == "__main__":
     main()
