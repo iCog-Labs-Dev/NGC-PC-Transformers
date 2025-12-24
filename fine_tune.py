@@ -3,7 +3,6 @@ import jax.numpy as jnp
 from jax import random
 import numpy as np
 import sys
-import re
 
 # --- Project Imports ---
 try:
@@ -16,87 +15,61 @@ except ImportError as e:
     sys.exit(1)
 
 # ==========================================
-# 1. GRAMMAR DEFINITION
+# 1. FIXED PARAMETERS (The "Safe" Zone)
 # ==========================================
-# We define the search space. alogos will pick one option from each rule.
+FIXED_BS = 64
+FIXED_BLOCK = 12   # Locked to 12 to satisfy the (12,12) reshape logic
+FIXED_VOCAB = 5000
+FIXED_EMBED = 128
+
+# ==========================================
+# 2. GRAMMAR DEFINITION (Searching for Logic/Dynamics)
+# ==========================================
 bnf_text = """
-<hparams>      ::= <bs> "," <embed> "," <layers> "," <dropout> "," <block> "," <vocab> "," <eta> "," <t_step> "," <act> "," <w_init>
+<hparams>      ::= <heads> "," <layers> "," <dropout> "," <eta> "," <t_step> "," <act> "," <w_init>
 
-<bs>           ::= "batch_size=" <bs_v>
-<bs_v>         ::= "32" | "64"
-
-<embed>        ::= "n_embed=128,n_heads=4" | "n_embed=128,n_heads=8" | "n_embed=256,n_heads=4" | "n_embed=256,n_heads=8"
-
-<layers>       ::= "n_layers=" <l_v>
-<l_v>          ::= "2" | "4" | "6"
-
-<dropout>      ::= "dropout_rate=" <d_v>
-<d_v>          ::= "0.0" | "0.1"
-
-<block>        ::= "block_size=" <bl_v>
-<bl_v>         ::= "48" | "96"
-
-<vocab>        ::= "vocab_size=" <v_v>
-<v_v>          ::= "1000" | "5000"
-
-<eta>          ::= "eta=" <e_v>
-<e_v>          ::= "0.01" | "0.005" | "0.001"
-
-<t_step>       ::= "T=" <t_v>
-<t_v>          ::= "10" | "20"
-
-<act>          ::= "act_fx=" <a_v>
-<a_v>          ::= "identity" | "lrelu" | "tanh"
-
-<w_init>       ::= "w_val=" <w_v>
-<w_v>          ::= "0.01" | "0.05" | "0.1"
+<heads>        ::= "n_heads=4" | "n_heads=8"
+<layers>       ::= "n_layers=2" | "n_layers=4" | "n_layers=6"
+<dropout>      ::= "dropout_rate=0.0" | "dropout_rate=0.1"
+<eta>          ::= "eta=0.01" | "0.005" | "0.001"
+<t_step>       ::= "T=10" | "T=20"
+<act>          ::= "act_fx=identity" | "act_fx=lrelu" | "act_fx=tanh"
+<w_init>       ::= "w_val=0.01" | "w_val=0.05" | "w_val=0.1"
 """
 
 # ==========================================
-# 2. GLOBAL DATA LOADING
+# 3. GLOBAL DATA LOADING
 # ==========================================
 print("--- Loading Dataset ---")
-# Use large enough defaults for the loader; the objective function will slice them
-data_loader = DataLoader(seq_len=128, batch_size=64)
+data_loader = DataLoader(seq_len=128, batch_size=FIXED_BS)
 train_loader, valid_loader, _ = data_loader.load_and_prepare_data()
 
 # ==========================================
-# 3. OBJECTIVE FUNCTION (Fitness Evaluation)
+# 4. OBJECTIVE FUNCTION
 # ==========================================
 def objective_function(phenotype_string):
-    # Fix the alogos quote bug: remove all double quotes and extra spaces
     clean_string = phenotype_string.replace('"', '').replace(' ', '')
     print(f"\n[Testing Config]: {clean_string}")
     
     try:
-        # A. Parse the clean string into a dictionary
+        # Parse searchable params
         params = {}
-        parts = clean_string.split(',')
-        for part in parts:
+        for part in clean_string.split(','):
             if '=' in part:
                 k, v = part.split('=')
-                # Type conversion
-                if k in ['act_fx']:
-                    params[k] = v
-                elif k in ['dropout_rate', 'eta', 'w_val']:
-                    params[k] = float(v)
-                else:
-                    params[k] = int(v)
+                if k == 'act_fx': params[k] = v
+                elif k in ['dropout_rate', 'eta', 'w_val']: params[k] = float(v)
+                else: params[k] = int(v)
 
-        # B. Setup Model Symmetries
-        # As per your requirement: wub = val, wlb = -val
-        w_init = params.get('w_val', 0.1)
-        wub = w_init
-        wlb = -w_init
-
-        # C. Initialize NGCTransformer
         dkey = random.PRNGKey(42)
+        
+        # Initialize with FIXED + SEARCHED params
         model = NGCTransformer(
             dkey,
-            batch_size=params['batch_size'],
-            seq_len=params['block_size'],
-            n_embed=params['n_embed'],
-            vocab_size=params['vocab_size'],
+            batch_size=FIXED_BS,
+            seq_len=FIXED_BLOCK,
+            n_embed=FIXED_EMBED,
+            vocab_size=FIXED_VOCAB,
             n_layers=params['n_layers'],
             n_heads=params['n_heads'],
             T=params['T'],
@@ -106,88 +79,61 @@ def objective_function(phenotype_string):
             eta=params['eta'],
             dropout_rate=params['dropout_rate'],
             exp_dir="exp_tuning",
-            wub=wub,
-            wlb=wlb,
+            wub=params['w_val'],
+            wlb=-params['w_val'],
             model_name="tuning_model"
         )
 
-        # D. Fast Training (Evaluation Loop)
-        # We run a small number of steps to see if the model learns
-        NUM_STEPS = 40 
+        # Fast training steps
         train_iter = iter(train_loader)
-        
-        for _ in range(NUM_STEPS):
+        for _ in range(20):
             try:
                 batch = next(train_iter)
             except StopIteration:
                 train_iter = iter(train_loader)
                 batch = next(train_iter)
 
-            # Slice data to match the current individual's hyperparameters
-            inputs = batch[0][1][:params['batch_size'], :params['block_size']]
-            targets = batch[1][1][:params['batch_size'], :params['block_size']]
+            # Slicing inputs to FIXED_BLOCK
+            inputs = batch[0][1][:FIXED_BS, :FIXED_BLOCK]
+            targets = batch[1][1][:FIXED_BS, :FIXED_BLOCK]
+            targets_flat = jnp.eye(FIXED_VOCAB)[targets].reshape(-1, FIXED_VOCAB)
             
-            # One-hot encoding
-            targets_flat = jnp.eye(params['vocab_size'])[targets].reshape(-1, params['vocab_size'])
-            
-            # Model process (Update synapses)
             model.process(obs=inputs, lab=targets_flat, adapt_synapses=True)
 
-        # E. Calculate Fitness (Validation CE)
-        # We want to minimize Cross Entropy
-        val_ce, _ = eval_model(model, valid_loader, params['vocab_size'])
+        # Validation CE
+        val_ce, _ = eval_model(model, valid_loader, FIXED_VOCAB)
         
         if np.isnan(val_ce) or np.isinf(val_ce):
-            return 1000.0 # Return penalty for unstable models
+            return 2000.0
             
         print(f"   >>> Result CE: {val_ce:.4f}")
         return float(val_ce)
 
     except Exception as e:
         print(f"   [!] Individual Failed: {e}")
-        return 1000.0
+        return 5000.0
 
 # ==========================================
-# 4. EVOLUTIONARY RUN
+# 5. EVOLUTIONARY RUN
 # ==========================================
 def main():
-    # 1. Create Grammar object
     grammar = al.Grammar(bnf_text=bnf_text)
-
-    # 2. Configure Genetic Algorithm
-    # Adjust population_size and max_generations based on your time/GPU
     ea = al.EvolutionaryAlgorithm(
-        grammar, 
-        objective_function, 
-        'min', 
-        population_size=12, 
+        grammar, objective_function, 'min', 
+        population_size=10, 
         max_generations=5
     )
 
-    # 3. Start Search
     print("\n" + "="*40)
-    print("STARTING GRAMMAR-GUIDED SEARCH")
+    print("STARTING SEARCH (BS=64, Seq=12, Embed=128)")
     print("="*40)
     best_ind = ea.run()
 
-    # 4. Final Results
     print("\n" + "="*40)
-    print("BEST HYPERPARAMETERS FOUND")
+    print("BEST TUNABLE PARAMS FOUND")
     print("="*40)
-    
-    clean_best = best_ind.phenotype.replace('"', '').replace(' ', '')
-    print(f"Config: {clean_best}")
-    print(f"Validation CE: {best_ind.fitness:.4f}")
-    
-    # Final conversion logic for your config file
-    print("\nSuggested config.py values:")
-    for part in clean_best.split(','):
-        if 'w_val' in part:
-            v = float(part.split('=')[1])
-            print(f"wub = {v}")
-            print(f"wlb = {-v}")
-        else:
-            print(part)
+    print(f"Phenotype: {best_ind.phenotype}")
+    print(f"Fitness: {best_ind.fitness:.4f}")
 
 if __name__ == "__main__":
     main()
