@@ -18,8 +18,8 @@ except ImportError as e:
 # 1. FIXED PARAMETERS
 # ==========================================
 FIXED_BS = 64
-FIXED_BLOCK = 12
-FIXED_VOCAB = 5000 
+FIXED_BLOCK = 128
+FIXED_VOCAB = 11710 
 FIXED_EMBED = 128
 
 # ==========================================
@@ -40,7 +40,7 @@ bnf_text = """
 # ==========================================
 # 3. GLOBAL DATA LOADING
 # ==========================================
-data_loader = DataLoader(seq_len=128, batch_size=FIXED_BS)
+data_loader = DataLoader(seq_len=FIXED_BLOCK, batch_size=FIXED_BS)
 train_loader, valid_loader, _ = data_loader.load_and_prepare_data()
 
 # ==========================================
@@ -68,8 +68,8 @@ def objective_function(phenotype_string):
             dkey, batch_size=FIXED_BS, seq_len=FIXED_BLOCK, n_embed=FIXED_EMBED,
             vocab_size=FIXED_VOCAB, n_layers=p_layers, n_heads=p_heads,
             T=p_T, dt=1., tau_m=10.0, act_fx=p_act, eta=p_eta,
-            dropout_rate=p_dropout, exp_dir="exp_tuning",
-            wub=p_w, wlb=-p_w, model_name="tuning_model"
+            dropout_rate=p_dropout, exp_dir="exp",
+            wub=p_w, wlb=-p_w, model_name="ngc_transformer"
         )
 
         train_iter = iter(train_loader)
