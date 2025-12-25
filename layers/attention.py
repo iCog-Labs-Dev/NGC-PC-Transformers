@@ -38,17 +38,17 @@ class Attention:
         self.W_q = HebbianSynapse(f"{prefix}W_q", shape=(n_embed, n_embed), batch_size=batch_size * seq_len, eta=eta,
                                 weight_init=dist.uniform(amin=wlb, amax=wub),
                                 bias_init=dist.constant(value=0.), w_bound=0., 
-                                optim_type=optim_type, sign_value= 1.0, key=subkeys[0])
+                                optim_type=optim_type, sign_value= -1., key=subkeys[0])
         
         self.W_k = HebbianSynapse(f"{prefix}W_k", shape=(n_embed, n_embed), batch_size=batch_size * seq_len, eta=eta,
                                 weight_init=dist.uniform(amin=wlb, amax=wub),
                                 bias_init=dist.constant(value=0.), w_bound=0., 
-                                optim_type=optim_type, sign_value= 1.0, key=subkeys[1])
+                                optim_type=optim_type, sign_value= -1., key=subkeys[1])
         
         self.W_v = HebbianSynapse(f"{prefix}W_v", shape=(n_embed, n_embed), batch_size=batch_size * seq_len, eta=eta,
                                 weight_init=dist.uniform(amin=wlb, amax=wub),
                                 bias_init=dist.constant(value=0.), w_bound=0., 
-                                optim_type=optim_type, sign_value= 1.0, key=subkeys[2])
+                                optim_type=optim_type, sign_value= -1., key=subkeys[2])
        
         self.attn_block = AttentionBlock(f"{prefix}attn_block", n_heads=n_heads, 
                                        n_embed=n_embed, seq_len=seq_len,
@@ -58,7 +58,7 @@ class Attention:
         self.W_attn_out = HebbianSynapse(f"{prefix}W_attn_out", shape=(n_embed, n_embed), batch_size=batch_size * seq_len, eta=eta,
                             weight_init=dist.uniform(amin=wlb, amax=wub),
                             bias_init=dist.constant(value=0.), w_bound=0., 
-                            optim_type=optim_type, sign_value= 1.0, key=subkeys[3])
+                            optim_type=optim_type, sign_value= -1., key=subkeys[3])
         
         self.e_attn = ErrorCell(f"{prefix}e_attn", n_units=n_embed, 
                                   batch_size=batch_size * seq_len) # shape=(seq_len, n_embed, 1),
