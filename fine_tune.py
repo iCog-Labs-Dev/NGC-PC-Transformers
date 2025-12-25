@@ -27,14 +27,14 @@ FIXED_BLOCK = config.seq_len
 FIXED_VOCAB = config.vocab_size
 
 bnf_text = """
-<hparams>      ::= <embed> "," <heads> "," <layers> "," <dropout> "," <eta> "," <t_step> "," <act> "," <w_init>
+<hparams>      ::= <embed> "," <heads> "," <layers> "," <eta> "," <act> "," <w_init>
 
 <embed>        ::= "n_embed=64" | "n_embed=128" | "n_embed=256"
 <heads>        ::= "n_heads=4" | "n_heads=6" | "n_heads=8"
 <layers>       ::= "n_layers=2" | "n_layers=4" | "n_layers=6"
-<dropout>      ::= "dropout_rate=0.0" | "dropout_rate=0.1" | "dropout_rate=0.5"
+
 <eta>          ::= "eta=0.01" | "eta=0.005" | "eta=0.001"
-<t_step>       ::= "T=10" | "T=20"
+
 <act>          ::= "act_fx=identity" | "act_fx=lrelu" | "act_fx=tanh"
 <w_init>       ::= "w_val=0.01" | "w_val=0.05" | "w_val=0.1"
 """
