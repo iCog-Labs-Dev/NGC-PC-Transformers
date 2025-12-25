@@ -8,7 +8,7 @@ import os
 import traceback
 from config import Config as config
 
-# 1. FORCE UNBUFFERED OUTPUT
+
 os.environ["PYTHONUNBUFFERED"] = "1"
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
@@ -21,9 +21,7 @@ except ImportError as e:
     print(f"Import Error: {e}. Check project path.")
     sys.exit(1)
 
-# ==========================================
-# LOGGING HELPER
-# ==========================================
+
 LOG_FILE = "search_progress.log"
 
 def log_message(message, end="\n"):
@@ -34,9 +32,6 @@ def log_message(message, end="\n"):
 with open(LOG_FILE, "w") as f:
     f.write("=== New Search Session ===\n")
 
-# ==========================================
-# PARAMETERS
-# ==========================================
 FIXED_BS = config.batch_size
 FIXED_BLOCK = config.seq_len
 FIXED_VOCAB = config.vocab_size
@@ -58,9 +53,7 @@ bnf_text = """
 data_loader = DataLoader(seq_len=FIXED_BLOCK, batch_size=FIXED_BS)
 train_loader, valid_loader, _ = data_loader.load_and_prepare_data()
 
-# ==========================================
-# OBJECTIVE FUNCTION
-# ==========================================
+
 def objective_function(phenotype_string):
     clean_string = phenotype_string.replace('"', '').replace(' ', '')
     log_message(f"\n[Testing Config]: {clean_string}")
