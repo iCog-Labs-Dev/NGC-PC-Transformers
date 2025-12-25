@@ -70,7 +70,7 @@ def objective_function(phenotype_string):
             tau_m=config.tau_m, 
             act_fx=params['act_fx'], 
             eta=float(params['eta']),
-            dropout_rate=config.n_iter, 
+            dropout_rate=float(config.dropout_rate), 
             pos_learnable=config.pos_learnable,
             optim_type=config.optim_type,
             wub=float(params['w_val']), 

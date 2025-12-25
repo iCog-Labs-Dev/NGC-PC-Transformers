@@ -74,9 +74,9 @@ class NGCTransformer:
             self.z_actfx= RateCell("z_actfx", n_units= vocab_size, tau_m=0., act_fx="softmax", batch_size=batch_size * seq_len)
             self.projection = Projection(dkey=subkeys[29], n_embed=n_embed, seq_len=seq_len, batch_size=batch_size,
                                              vocab_size=vocab_size, eta=eta, optim_type=optim_type, pos_learnable=pos_learnable, wub=wub, wlb=wlb, n_blocks=n_layers, n_heads=n_heads, dropout_rate=dropout_rate)
-            self.reshape_4d_to_2d = ReshapeComponent("reshape_4d_to_2d",
-                                            input_shape=(batch_size, seq_len, n_embed, 1),
-                                            output_shape=(batch_size * seq_len, n_embed))
+            # self.reshape_4d_to_2d = ReshapeComponent("reshape_4d_to_2d",
+            #                                 input_shape=(batch_size, seq_len, n_embed, 1),
+            #                                 output_shape=(batch_size * seq_len, n_embed))
                 
             self.reshape_3d_to_2d_embed = ReshapeComponent("reshape_3d_to_2d_embed",
                                             input_shape=(batch_size, seq_len, n_embed),
