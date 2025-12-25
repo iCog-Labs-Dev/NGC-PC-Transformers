@@ -75,6 +75,8 @@ def objective_function(phenotype_string):
             optim_type=config.optim_type,
             wub=float(params['w_val']), 
             wlb=-float(params['w_val']), 
+            exp_dir="exp",
+            loadDir= None
         )
 
         # Fast training steps
