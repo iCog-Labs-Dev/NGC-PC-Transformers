@@ -102,15 +102,15 @@ def objective_function(phenotype_string):
 
         # --- Evaluation (CE and PPL) ---
         val_ce, _ = eval_model(model, valid_loader, FIXED_VOCAB)
-        
+
         if np.isnan(val_ce) or np.isinf(val_ce):
-            return 2000.0
-        
-        # Calculate Perplexity
-        val_ppl = np.exp(val_ce)
-            
-        print(f"   >>> Result CE: {val_ce:.4f} | PPL: {val_ppl:.4f}")
+            status = "INVALID (NaN/Inf)"
+            val_ce = 2000.0
+        else:
+            val_ppl = float(np.exp(val_ce))
+
         return float(val_ce)
+
 
     except Exception as e:
         print(f"   [!] Individual Failed: {e}")
@@ -118,10 +118,26 @@ def objective_function(phenotype_string):
 
     finally:
         # Explicit Memory Cleanup for JAX
+        
+        if val_ce is not None:
+            print(
+                f"   >>> RESULT | {clean_string} | "
+                f"CE={val_ce:.4f} | "
+                f"PPL={val_ppl if val_ppl is not None else 'N/A'} | "
+                f"STATUS={status}",
+                flush=True
+            )
+        else:
+            print(
+                f"   >>> RESULT | {clean_string} | FAILED (no CE)",
+                flush=True
+            )
+
         if model is not None:
             del model
         clear_caches()
         gc.collect()
+
 
 # ==========================================
 # 3. MAIN SEARCH LOOP
