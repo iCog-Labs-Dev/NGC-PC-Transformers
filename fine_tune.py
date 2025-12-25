@@ -42,20 +42,17 @@ FIXED_BLOCK = config.seq_len
 FIXED_VOCAB = config.vocab_size
 
 bnf_text = """
-<hparams> ::= <e64> "," <layers> "," <eta> "," <act> "," <w_init>
-            | <e128> "," <layers> "," <eta> "," <act> "," <w_init>
-            | <e256> "," <layers> "," <eta> "," <act> "," <w_init>
+<hparams> ::= <e64> "," <layers> "," <eta> "," <act>
+            | <e128> "," <layers> "," <eta> "," <act>
+            | <e256> "," <layers> "," <eta> "," <act>
 
-<e64>   ::= "n_embed=64,n_heads=4" | "n_embed=64,n_heads=8"
-<e128>  ::= "n_embed=128,n_heads=4" | "n_embed=128,n_heads=8"
-<e256>  ::= "n_embed=256,n_heads=4" | "n_embed=256,n_heads=8"
+<e64>    ::= "n_embed=64,n_heads=4" | "n_embed=64,n_heads=8"
+<e128>   ::= "n_embed=128,n_heads=4" | "n_embed=128,n_heads=8"
+<e256>   ::= "n_embed=256,n_heads=4" | "n_embed=256,n_heads=8"
 
 <layers> ::= "n_layers=2" | "n_layers=4" | "n_layers=6"
-
 <eta>    ::= "eta=0.01" | "eta=0.005" | "eta=0.001"
-
 <act>    ::= "act_fx=identity" | "act_fx=lrelu" | "act_fx=tanh"
-<w_init> ::= "w_val=0.01" | "w_val=0.05" | "w_val=0.1"
 """
 
 data_loader = DataLoader(seq_len=FIXED_BLOCK, batch_size=FIXED_BS)
@@ -92,8 +89,8 @@ def objective_function(phenotype_string):
             dropout_rate=float(config.dropout_rate), 
             pos_learnable=config.pos_learnable,
             optim_type=config.optim_type,
-            wub=float(params['w_val']), 
-            wlb=-float(params['w_val']), 
+            wub=config.wub, 
+            wlb=config.wlb, 
             exp_dir="exp",
             loadDir=None,
             model_name="ngc_transformer"
