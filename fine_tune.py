@@ -71,8 +71,6 @@ def objective_function(phenotype_string):
             act_fx=params['act_fx'], 
             eta=float(params['eta']),
             dropout_rate=float(params['dropout_rate']), 
-            exp_dir="exp",
-            model_name="ngc_transformer",
             pos_learnable=config.pos_learnable,
             optim_type=config.optim_type,
             wub=float(params['w_val']), 
