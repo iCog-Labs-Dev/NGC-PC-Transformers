@@ -27,17 +27,22 @@ FIXED_BLOCK = config.seq_len
 FIXED_VOCAB = config.vocab_size
 
 bnf_text = """
-<hparams>      ::= <embed> "," <heads> "," <layers> "," <eta> "," <act> "," <w_init>
+<hparams> ::= <e64> "," <layers> "," <eta> "," <act> "," <w_init>
+           | <e128> "," <layers> "," <eta> "," <act> "," <w_init>
+           | <e256> "," <layers> "," <eta> "," <act> "," <w_init>
 
-<embed>        ::= "n_embed=64" | "n_embed=128" | "n_embed=256"
-<heads>        ::= "n_heads=4" | "n_heads=6" | "n_heads=8"
-<layers>       ::= "n_layers=2" | "n_layers=4" | "n_layers=6"
+<e64>   ::= "n_embed=64,n_heads=4" | "n_embed=64,n_heads=8"
+<e128>  ::= "n_embed=128,n_heads=4" | "n_embed=128,n_heads=8"
+<e256>  ::= "n_embed=256,n_heads=4" | "n_embed=256,n_heads=8"
 
-<eta>          ::= "eta=0.01" | "eta=0.005" | "eta=0.001"
+<layers> ::= "n_layers=2" | "n_layers=4" | "n_layers=6"
 
-<act>          ::= "act_fx=identity" | "act_fx=lrelu" | "act_fx=tanh"
-<w_init>       ::= "w_val=0.01" | "w_val=0.05" | "w_val=0.1"
+<eta>    ::= "eta=0.01" | "eta=0.005" | "eta=0.001"
+
+<act>    ::= "act_fx=identity" | "act_fx=lrelu" | "act_fx=tanh"
+<w_init> ::= "w_val=0.01" | "w_val=0.05" | "w_val=0.1"
 """
+
 
 # Initialize Data
 data_loader = DataLoader(seq_len=FIXED_BLOCK, batch_size=FIXED_BS)
