@@ -76,7 +76,8 @@ def objective_function(phenotype_string):
             wub=float(params['w_val']), 
             wlb=-float(params['w_val']), 
             exp_dir="exp",
-            loadDir= None
+            loadDir= None,
+            model_name="ngc_transformer"
         )
 
         # Fast training steps
