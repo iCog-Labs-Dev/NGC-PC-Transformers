@@ -1,10 +1,9 @@
-from jax import random, numpy as jnp, jit
-import jax
-from functools import partial
-from ngclearn.utils.optim import get_opt_init_fn, get_opt_step_fn
+from jax import  numpy as jnp
 from ngclearn.components.jaxComponent import JaxComponent
-from ngclearn import resolver, Compartment
-from ngcsimlib.compilers.process import transition
+from ngclearn import Compartment
+from ngclearn import compilable
+
+# from ngcsimlib.compilers.process import transition
 
 
 
@@ -18,12 +17,19 @@ class ReshapeComponent(JaxComponent):
         self.inputs = Compartment(jnp.zeros(input_shape))
         self.outputs = Compartment(jnp.zeros(output_shape))
     
-    @transition(output_compartments=["outputs"])
-    @staticmethod
-    def advance_state(inputs, output_shape):
-        return inputs.reshape(output_shape)
+    @compilable
+    def advance_state(self):
+        inputs=self.inputs.get()
+        output_shape=self.output_shape.get()
+        output=inputs.reshape(output_shape)
+        self.outputs.set(output)
     
-    @transition(output_compartments=["inputs", "outputs"])
-    @staticmethod  
-    def reset(input_shape, output_shape):
-        return jnp.zeros(input_shape), jnp.zeros(output_shape)
+    
+    @compilable
+    def reset(self):
+        input_shape=self.input_shape.get()
+        output_shape=self.output_shape.get()
+        input=jnp.zeros(input_shape)
+        output=jnp.zeros(output_shape)
+        self.inputs.set(input)
+        self.outputs.set(output)

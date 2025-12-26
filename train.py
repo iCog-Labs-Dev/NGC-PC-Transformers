@@ -23,7 +23,7 @@ def main():
     
     model = NGCTransformer(dkey, batch_size=batch_size, seq_len=seq_len, n_embed=n_embed, vocab_size=vocab_size, n_layers=n_layers, n_heads=config.n_heads,
                           T=T, dt=1., tau_m=tau_m , act_fx=act_fx, eta=eta, dropout_rate= dropout_rate, exp_dir="exp",
-                  loadDir= None, pos_learnable= pos_learnable, optim_type=optim_type, wub = wub, wlb= wlb, model_name="ngc transformer" )
+                  loadDir= None, pos_learnable= pos_learnable, optim_type=optim_type, wub = wub, wlb= wlb, model_name="ngc_transformer" )
 
     def train_model(data_loader):
         total_nll, total_tokens = 0., 0
@@ -80,7 +80,7 @@ def main():
         dev_ce, dev_ppl = eval_model(model, valid_loader, vocab_size)
         print(f"Iter {i} Summary: CE = {dev_ce:.4f}, PPL = {dev_ppl:.4f}, Avg EFE = {avg_train_EFE:.4f}")
         if  i == (num_iter-1):
-          model.save_to_disk(params_only=True) # save final state of model to disk
+          model.save_to_disk(params_only=False) # save final state of model to disk
 
    
 if __name__ == "__main__":

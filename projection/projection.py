@@ -1,21 +1,19 @@
-from ngclearn.components import GaussianErrorCell as ErrorCell, RateCell, HebbianSynapse, StaticSynapse
-from ngclearn.utils.weight_distribution import uniform, constant
+from ngclearn.components import GaussianErrorCell as ErrorCell, RateCell, StaticSynapse
 from utils.model_util import ReshapeComponent
-from utils.attention_utils import AttentionBlock
 from utils.embed_utils import EmbeddingSynapse
-import ngclearn.utils.weight_distribution as dist
+from ngclearn.utils.distribution_generator import DistributionGenerator as dist
 from projection.proj_block import ProjBlock
 from jax import random
 class Projection():
-    def __init__(self, dkey, n_embed, seq_len, batch_size, vocab_size, eta, optim_type, pos_learnable, wub, wlb, n_blocks, n_heads, dropout_rate,  **kwargs):
+    def __init__(self, dkey, n_embed, seq_len, batch_size, vocab_size, eta, optim_type, pos_learnable, wub, wlb, n_blocks, n_heads, dropout_rate,act_fx,  **kwargs):
         dkey, *subkeys = random.split(dkey, 20)
         
-        self.q_embed = RateCell("q_embed", n_units=seq_len, tau_m=0., act_fx="identity",
+        self.q_embed_Ratecell = RateCell("q_embed_Ratecell", n_units=seq_len, tau_m=0., act_fx="identity",
                             batch_size=batch_size)
         
-        self.q_out = RateCell("q_out", n_units=n_embed, tau_m=0., act_fx="identity",
+        self.q_out_Ratecell = RateCell("q_out_Ratecell", n_units=n_embed, tau_m=0., act_fx=act_fx,
                           batch_size= batch_size * seq_len)
-        self.q_target = RateCell("q_target", n_units=vocab_size, tau_m=0., act_fx="softmax",
+        self.q_target_Ratecell = RateCell("q_target", n_units=vocab_size, tau_m=0., act_fx="softmax",
                                batch_size=batch_size * seq_len)
                
         self.Q_embed = EmbeddingSynapse("Q_embed", vocab_size=vocab_size, seq_len=seq_len,
@@ -36,12 +34,11 @@ class Projection():
                           eta=eta,
                           optim_type=optim_type,
                           wub=wub,
-                          wlb=wlb)
+                          wlb=wlb,
+                          act_fx=act_fx)
             self.blocks.append(block)       
         
-        self.Q_out = StaticSynapse("Q_out", shape=(n_embed, vocab_size), eta=eta,
-                             weight_init=dist.uniform(amin=-0.3, amax=0.3), bias_init=dist.constant(value=0.),
-                             w_bound=0., optim_type=optim_type, sign_value=-1., key=subkeys[12])
+        self.Q_out = StaticSynapse("Q_out", shape=(n_embed, vocab_size),  bias_init=dist.constant(value=0.), key=subkeys[12])
                 
         self.eq_target = ErrorCell("eq_target", n_units=vocab_size, batch_size=batch_size * seq_len)
                 
