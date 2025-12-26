@@ -547,17 +547,17 @@ class NGCTransformer:
         y_mu = self.output.e_out.mu.get() 
 
         L1 = self.embedding.e_embed.L.get()
-        print("L1",L1)
+        # print("L1",L1)
         L4 = self.output.e_out.L.get()
-        print("L1",L4)
+        # print("L1",L4)
         
         block_errors = 0.
         for i in range(self.n_layers):
                 block = self.blocks[i]
                 block_errors += block.attention.e_attn.L.get() + block.mlp.e_mlp.L.get() + block.mlp.e_mlp1.L.get()
-                print("e_attn",block.attention.e_attn.L.get())
-                print("e_mlp",block.mlp.e_mlp.L.get())
-                print("e_mlp1",block.mlp.e_mlp1.L.get())
+                # print("e_attn",block.attention.e_attn.L.get())
+                # print("e_mlp",block.mlp.e_mlp.L.get())
+                # print("e_mlp1",block.mlp.e_mlp1.L.get())
 
         EFE = L4 + block_errors + L1
 
