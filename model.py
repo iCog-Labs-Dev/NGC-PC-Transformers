@@ -555,9 +555,9 @@ class NGCTransformer:
         for i in range(self.n_layers):
                 block = self.blocks[i]
                 block_errors += block.attention.e_attn.L.get() + block.mlp.e_mlp.L.get() + block.mlp.e_mlp1.L.get()
-                print(block.attention.e_attn.L.get())
-                print(block.mlp.e_mlp.L.get())
-                print(block.mlp.e_mlp1.L.get())
+                print("e_attn",block.attention.e_attn.L.get())
+                print("e_mlp",block.mlp.e_mlp.L.get())
+                print("e_mlp1",block.mlp.e_mlp1.L.get())
 
         EFE = L4 + block_errors + L1
 
