@@ -32,4 +32,3 @@ class EMBEDDING:
                                   batch_size=batch_size * seq_len) # shape=(seq_len, embed_dim, 1),
     
             
-
