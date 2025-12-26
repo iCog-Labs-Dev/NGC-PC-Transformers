@@ -4,6 +4,7 @@ from jax import numpy as jnp, random, jit
 import jax
 from config import Config as config
 from utils.attention_utils import AttentionBlock
+from utils.categoricalError import CategoricalErrorCell
 
 
 
@@ -60,8 +61,10 @@ class Attention:
                             bias_init=dist.constant(value=0.), w_bound=0., 
                             optim_type=optim_type, sign_value= -1., key=subkeys[3])
         
-        self.e_attn = ErrorCell(f"{prefix}e_attn", n_units=n_embed, 
-                                  batch_size=batch_size * seq_len) # shape=(seq_len, n_embed, 1),
+        self.e_attn = CategoricalErrorCell(f"{prefix}e_attn", n_units=n_embed, 
+                                  batch_size=batch_size * seq_len)
+        
+         # shape=(seq_len, n_embed, 1),
         
         self.E_attn = StaticSynapse(f"{prefix}E_attn", shape=(n_embed, n_embed),
                         weight_init=dist.uniform(low=wlb, high=wub),  key=subkeys[4])
