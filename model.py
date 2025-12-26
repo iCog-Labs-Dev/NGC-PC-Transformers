@@ -73,7 +73,7 @@ class NGCTransformer:
             self.z_target=RateCell("z_target", n_units= vocab_size, tau_m=0., act_fx="identity", batch_size=batch_size * seq_len) 
             self.z_actfx= RateCell("z_actfx", n_units= vocab_size, tau_m=0., act_fx="softmax", batch_size=batch_size * seq_len)
             self.projection = Projection(dkey=subkeys[29], n_embed=n_embed, seq_len=seq_len, batch_size=batch_size,
-                                             vocab_size=vocab_size, eta=eta, optim_type=optim_type, pos_learnable=pos_learnable, wub=wub, wlb=wlb, n_blocks=n_layers, n_heads=n_heads, dropout_rate=dropout_rate)
+                                             vocab_size=vocab_size, eta=eta, optim_type=optim_type, pos_learnable=pos_learnable, wub=wub, wlb=wlb, n_blocks=n_layers, n_heads=n_heads, dropout_rate=dropout_rate,act_fx=act_fx)
             self.reshape_4d_to_2d = ReshapeComponent("reshape_4d_to_2d",
                                             input_shape=(batch_size, seq_len, n_embed, 1),
                                             output_shape=(batch_size * seq_len, n_embed))
@@ -236,7 +236,7 @@ class NGCTransformer:
                 self.projection.q_out_Ratecell.zF >> self.projection.Q_out.inputs
                 self.projection.Q_out.outputs >> self.projection.q_target_Ratecell.j
 
-                self.projection.q_target_Ratecell.z >> self.projection.eq_target.mu
+                # self.projection.q_target_Ratecell.z >> self.projection.eq_target.mu   
 
                 
                 # Create the processes by iterating through all blocks
@@ -544,7 +544,7 @@ class NGCTransformer:
              
                 self.advance.run(t=ts,dt=1.)
            
-        y_mu = self.output.W_out.outputs.get() 
+        y_mu = self.output.e_out.mu.get() 
 
         L1 = self.embedding.e_embed.L.get()
         print("L1",L1)

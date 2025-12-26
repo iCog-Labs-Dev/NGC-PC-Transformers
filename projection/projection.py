@@ -5,13 +5,13 @@ from ngclearn.utils.distribution_generator import DistributionGenerator as dist
 from projection.proj_block import ProjBlock
 from jax import random
 class Projection():
-    def __init__(self, dkey, n_embed, seq_len, batch_size, vocab_size, eta, optim_type, pos_learnable, wub, wlb, n_blocks, n_heads, dropout_rate,  **kwargs):
+    def __init__(self, dkey, n_embed, seq_len, batch_size, vocab_size, eta, optim_type, pos_learnable, wub, wlb, n_blocks, n_heads, dropout_rate,act_fx,  **kwargs):
         dkey, *subkeys = random.split(dkey, 20)
         
         self.q_embed_Ratecell = RateCell("q_embed_Ratecell", n_units=seq_len, tau_m=0., act_fx="identity",
                             batch_size=batch_size)
         
-        self.q_out_Ratecell = RateCell("q_out_Ratecell", n_units=n_embed, tau_m=0., act_fx="identity",
+        self.q_out_Ratecell = RateCell("q_out_Ratecell", n_units=n_embed, tau_m=0., act_fx=act_fx,
                           batch_size= batch_size * seq_len)
         self.q_target_Ratecell = RateCell("q_target", n_units=vocab_size, tau_m=0., act_fx="softmax",
                                batch_size=batch_size * seq_len)
@@ -34,7 +34,8 @@ class Projection():
                           eta=eta,
                           optim_type=optim_type,
                           wub=wub,
-                          wlb=wlb)
+                          wlb=wlb,
+                          act_fx=act_fx)
             self.blocks.append(block)       
         
         self.Q_out = StaticSynapse("Q_out", shape=(n_embed, vocab_size),  bias_init=dist.constant(value=0.), key=subkeys[12])
