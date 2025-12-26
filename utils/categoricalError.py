@@ -58,34 +58,33 @@ class CategoricalErrorCell(JaxComponent):
     @compilable
     def advance_state(self, dt): 
         # Get variables
-        mu = self.mu.get()
-        target = self.target.get()
+        mu = self.mu.get() # These are probabilities (0 to 1)
+        target = self.target.get() # One-hot or target distribution
         modulator = self.modulator.get()
         mask = self.mask.get()
 
-        # 1. Compute KL Divergence Loss
-        # L = sum( target * log(target/mu) )
-        L_dist = CategoricalErrorCell.eval_kl_div(target, mu, self.eps)
-        L = jnp.sum(L_dist) 
+        # 1. Stable KL-Divergence Calculation for L
+        # We use a slightly larger epsilon to prevent PPL from exploding
+        eps = 1e-12 
+        mu_safe = jnp.clip(mu, eps, 1.0)
+        target_safe = jnp.clip(target, eps, 1.0)
+        
+        # D_KL(P || Q) = sum( P * (log P - log Q) )
+        L_dist = jnp.sum(target * (jnp.log(target_safe) - jnp.log(mu_safe)), axis=-1)
+        L = jnp.mean(L_dist) # Total loss for the batch
 
-        # 2. Compute the Error Signal (dmu)
-        # For KL Divergence w.r.t. the predicted probabilities mu:
-        # dL/dmu = -target / mu
-        # However, if mu is coming from a Softmax, the gradient of the loss 
-        # with respect to the LOGITS (pre-softmax) is (mu - target).
+        # 2. Stable Error Signal (The "Mismatch")
+        # Instead of the raw derivative -target/mu, we use (mu - target).
+        # This is the 'Natural Gradient' and is numerically stable.
+        dmu = (mu - target) 
         
-        # Here we provide the raw derivative of the KL loss w.r.t. mu:
-        mu_safe = jnp.clip(mu, self.eps, 1.0)
-        dmu = -(target / mu_safe) 
-        
-        # Derivative w.r.t. target (P)
-        dtarget = jnp.log(jnp.clip(target, self.eps, 1.0) / mu_safe) + 1.0
+        dtarget = -dmu # Symmetric error for the target compartment
 
         # Apply modulation and masking
         dmu = dmu * modulator * mask
         dtarget = dtarget * modulator * mask
         
-        # Reset mask for next step
+        # Reset mask
         mask = mask * 0. + 1. 
 
         # Update compartments
@@ -94,6 +93,7 @@ class CategoricalErrorCell(JaxComponent):
         self.L.set(jnp.squeeze(L))
         self.mask.set(mask)
 
+        
     @compilable
     def reset(self): 
         _shape = (self.batch_size, self.shape[0])
