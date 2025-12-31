@@ -1,6 +1,6 @@
 
-from ngclearn.components import GaussianErrorCell as ErrorCell, RateCell, HebbianSynapse, StaticSynapse
-import ngclearn.utils.weight_distribution as dist
+from ngclearn.components import GaussianErrorCell as ErrorCell, RateCell
+from ngclearn.utils.distribution_generator import DistributionGenerator as dist
 from config import Config as config
 from utils.embed_utils import EmbeddingSynapse
 from jax import random
@@ -30,11 +30,6 @@ class EMBEDDING:
             
         self.e_embed = ErrorCell("e_embed", n_units=embed_dim, 
                                   batch_size=batch_size * seq_len) # shape=(seq_len, embed_dim, 1),
-    def get_embedding_weights(self):
-        """Get both word and position embeddings"""
-        return {
-                'word_embeddings': self.W_embed.word_weights.value,
-                'position_embeddings': self.W_embed.pos_weights.value
-        }   
+    
             
 

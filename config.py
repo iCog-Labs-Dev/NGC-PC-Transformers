@@ -1,11 +1,9 @@
 class Config:
     SEED = 42
-    n_embed = 12
-    seq_len =  12
-    n_embed = 12
-    seq_len =  12
-    batch_size = 5
-    vocab_size = 11710# data vocab size + special tokens = 11706 + 4
+    n_embed = 64
+    seq_len =  16
+    batch_size = 8
+    vocab_size = 2000# data vocab size + special tokens = 11706 + 4
     n_heads = 2
     n_layers = 4
     dropout_rate = 0.0
@@ -14,7 +12,7 @@ class Config:
     pos_learnable = True
     optim_type = "adam"
     num_iter = 2
-    n_iter= 10
+    n_iter= 3
     wub = 0.2
     wlb = -0.2
     tau_m = 10.
