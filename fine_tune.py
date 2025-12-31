@@ -67,7 +67,7 @@ def objective_function(phenotype_string):
         dkey = random.PRNGKey(42)
         
         model = NGCTransformer(
-            dkey, 
+            dkey,  
             batch_size=FIXED_BS, 
             seq_len=FIXED_BLOCK, 
             n_embed=int(params['n_embed']),
