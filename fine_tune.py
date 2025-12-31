@@ -47,7 +47,7 @@ bnf_text = """
 
 <layers> ::= "n_layers=2" | "n_layers=4" | "n_layers=6"
 <eta>    ::= "eta=0.01" | "eta=0.005" | "eta=0.001"
-<act>    ::= "act_fx=identity" | "act_fx=lrelu" | "act_fx=tanh"
+<act>    ::= "act_fx=identity" | "act_fx=lrelu" | 
 """
 
 data_loader = DataLoader(seq_len=FIXED_BLOCK, batch_size=FIXED_BS)
@@ -82,8 +82,8 @@ def objective_function(phenotype_string):
             dropout_rate=float(config.dropout_rate), 
             pos_learnable=config.pos_learnable,
             optim_type=config.optim_type,
-            wub=config.wub, 
-            wlb=config.wlb, 
+            wub=float(params['wub']), 
+            wlb=float(params['wlb']), 
             exp_dir="exp",
             loadDir=None,
             model_name="ngc_transformer"
