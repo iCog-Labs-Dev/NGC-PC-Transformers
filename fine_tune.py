@@ -434,7 +434,7 @@ def main():
         objective_function, 
         'min', 
         population_size=6,   
-        max_generations=4,    
+        max_generations=3,    
         verbose=True
     )
     
