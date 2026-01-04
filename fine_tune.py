@@ -95,7 +95,7 @@ bnf_text = """
 <warmup>      ::= "warmup_epochs=1" | "warmup_epochs=2" | "warmup_epochs=3" | "warmup_epochs=5"
 <bounds>      ::= "wlb=-0.05,wub=0.05" | "wlb=-0.02,wub=0.02" | "wlb=-0.01,wub=0.01"
 <tau_m>       ::= "tau_m=25" | "tau_m=10" | "tau_m=20"
-<act_fx>      ::= "act_fx=tanh" | "act_fx=softplus" | "act_fx=identity"
+<act_fx>      ::= "act_fx=tanh"  | "act_fx=identity"
 """
 
 def get_dynamic_batch_size(n_embed, block_size):

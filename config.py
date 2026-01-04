@@ -14,7 +14,7 @@ class Config:
     pos_learnable = True
     optim_type = "adam"
     num_iter = 3
-    n_iter= 20
+    n_iter= 0
     # Approximate Xavier scaling: 1 / sqrt(512) is about 0.04
     wub = 0.05
     wlb = -0.05
