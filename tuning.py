@@ -25,7 +25,7 @@ from config import Config as base_config
 from ngclearn.utils.metric_utils import measure_CatNLL
 import gc
 
-EFE_STABILITY_THRESHOLD = 2e1
+EFE_STABILITY_THRESHOLD = 300
 
 
 def define_search_space(trial):
