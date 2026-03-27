@@ -314,12 +314,12 @@ class NGCTransformer:
                    
                    
                    
-                    reset_process >> block.attention.z_qkv.reset
-                    reset_process >> block.attention.z_attn.reset
+                    # reset_process >> block.attention.z_qkv.reset
+                    # reset_process >> block.attention.z_attn.reset
                     reset_process >> block.attention.e_qkv.reset
                     reset_process >> block.attention.e_attn.reset
-                    reset_process >> block.mlp.z_mlp.reset
-                    reset_process >> block.mlp.z_mlp2.reset
+                    # reset_process >> block.mlp.z_mlp.reset
+                    # reset_process >> block.mlp.z_mlp2.reset
                     reset_process >> block.mlp.e_mlp.reset
                     reset_process >> block.mlp.e_mlp1.reset
                     reset_process >> block.reshape_3d_to_2d.reset
@@ -348,10 +348,10 @@ class NGCTransformer:
                 reset_process >> self.projection.q_out_Ratecell.reset
                 reset_process >> self.projection.q_target_Ratecell.reset
                 reset_process >> self.projection.eq_target.reset
-                reset_process >> self.embedding.z_embed.reset
-                reset_process >> self.output.z_out.reset
-                reset_process >> self.z_target.reset
-                reset_process >> self.z_actfx.reset
+                # reset_process >> self.embedding.z_embed.reset
+                # reset_process >> self.output.z_out.reset
+                # reset_process >> self.z_target.reset
+                # reset_process >> self.z_actfx.reset
                 reset_process >> self.embedding.e_embed.reset
                 reset_process >> self.output.e_out.reset
                 reset_process >> self.output.W_out.reset
