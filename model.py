@@ -348,10 +348,10 @@ class NGCTransformer:
                 reset_process >> self.projection.q_out_Ratecell.reset
                 reset_process >> self.projection.q_target_Ratecell.reset
                 reset_process >> self.projection.eq_target.reset
-                # reset_process >> self.embedding.z_embed.reset
+                reset_process >> self.embedding.z_embed.reset
                 # reset_process >> self.output.z_out.reset
-                # reset_process >> self.z_target.reset
-                # reset_process >> self.z_actfx.reset
+                reset_process >> self.z_target.reset
+                reset_process >> self.z_actfx.reset
                 reset_process >> self.embedding.e_embed.reset
                 reset_process >> self.output.e_out.reset
                 reset_process >> self.output.W_out.reset
