@@ -13,13 +13,13 @@ class Block:
         dkey, attn_key, mlp_key = random.split(dkey, 3)
         prefix = f"block{block_id}_"
 
-        # self.ln1 = RMSNorm(f"{prefix}ln1", n_embed=n_embed, batch_size= batch_size * seq_len)
+        #self.ln1 = RMSNorm(f"{prefix}ln1", n_embed=n_embed, batch_size= batch_size * seq_len)
 
         self.attention = Attention(dkey=attn_key, n_embed=n_embed, seq_len=seq_len,
                                  batch_size=batch_size, n_heads=n_heads,
                                  dropout_rate=dropout_rate, eta=eta, optim_type= optim_type, wub=wub, wlb=wlb, prefix=prefix, tau_m=tau_m)
         
-        # self.ln2 = RMSNorm(f"{prefix}ln2", n_embed=n_embed, batch_size= batch_size * seq_len)
+        #self.ln2 = RMSNorm(f"{prefix}ln2", n_embed=n_embed, batch_size= batch_size * seq_len)
         self.mlp = MLP(dkey=mlp_key, n_embed=n_embed, seq_len=seq_len,
                       batch_size=batch_size, eta=eta, optim_type=optim_type, wub=wub, wlb=wlb, prefix=prefix, tau_m=tau_m)
 
