@@ -2,7 +2,7 @@ import jax.numpy as jnp
 from pathlib import Path
 from ngclearn.utils.data_loader import DataLoader as NGCDataLoader
 import sys
-
+import numpy as np
 DIR = Path(__file__).parent
 sys.path.append(str(DIR.parent))
 
@@ -36,12 +36,8 @@ class DataLoader:
                 jnp.full((window_size - len(tokens),), self.pad_token)
             ])
             sequences = padded_tokens.reshape(1, -1)  
-        else:
-            sequences = []
-            for i in range(num_sequences):
-                window = tokens[i:i + window_size]
-                sequences.append(window)
-            sequences = jnp.stack(sequences)  
+     
+        sequences = np.lib.stride_tricks.sliding_window_view(tokens, window_size)
         
         inputs = sequences[:, :-1]    
         targets = sequences[:, 1:]    

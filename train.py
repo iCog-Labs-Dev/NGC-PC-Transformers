@@ -7,6 +7,11 @@ from config import Config as config
 from eval import eval_model
 import time
 
+
+jax.config.update("jax_default_matmul_precision", "high")
+jax.config.update("jax_compilation_cache_dir", "/tmp/jax_cache")
+jax.config.update("jax_persistent_cache_min_entry_size_bytes", 0)
+jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
 def main():
     seq_len, batch_size, n_embed, vocab_size, n_layers, n_heads, n_iter, optim_type = config.seq_len, config.batch_size, config.n_embed, config.vocab_size, config.n_layers, config.n_heads, config.n_iter, config.optim_type
     pos_learnable= config.pos_learnable
@@ -21,7 +26,7 @@ def main():
     dkey = random.PRNGKey(1234)
     
     data_loader = DataLoader(seq_len=seq_len, batch_size=batch_size)
-    train_loader, valid_loader, test_loader = data_loader.load_and_prepare_data()
+    train_loader, valid_loader, _ = data_loader.load_and_prepare_data()
     
     model = NGCTransformer(dkey, batch_size=batch_size, seq_len=seq_len, n_embed=n_embed, vocab_size=vocab_size, n_layers=n_layers, n_heads=config.n_heads,
                           T=T, dt=1., tau_m=tau_m , act_fx=act_fx, eta=eta, dropout_rate= dropout_rate, exp_dir="exp",
