@@ -160,20 +160,26 @@ class NGCTransformer:
                     block.attention.attn_block.dv >> block.attention.E_v.inputs
 
                     # RMSNorm gradient corrects error before entering z_qkv
-                    block.attention.E_q.outputs >> block.ln1_grad.dmu
-                    block.ln1.inputs            >> block.ln1_grad.mu
-                    block.ln1.rms               >> block.ln1_grad.rms
-                    block.ln1_grad.dmu_         >> block.attention.z_qkv.jq
+                    #q path
+                    block.attention.e_attn.dmu  >> block.ln1_grad_q.dmu
+                    block.ln1.inputs            >> block.ln1_grad_q.mu
+                    block.ln1.rms               >> block.ln1_grad_q.rms
+                    block.attention.attn_block.dq >> block.ln1_grad_q.dmu_attn
+                    block.ln1_grad_q.dmu_       >> block.attention.z_qkv.jq
  
-                    block.attention.E_k.outputs >> block.ln1_grad.dmu
-                    block.ln1_grad.dmu_         >> block.attention.z_qkv.jk
+                    #  K path 
+                    block.attention.e_attn.dmu  >> block.ln1_grad_k.dmu
+                    block.ln1.inputs            >> block.ln1_grad_k.mu
+                    block.ln1.rms               >> block.ln1_grad_k.rms
+                    block.attention.attn_block.dk >> block.ln1_grad_k.dmu_attn
+                    block.ln1_grad_k.dmu_       >> block.attention.z_qkv.jk
  
-                    block.attention.E_v.outputs >> block.ln1_grad.dmu
-                    block.ln1_grad.dmu_         >> block.attention.z_qkv.jv
- 
-                    # e_attn -> E_attn -> z_attn.j
-                    block.attention.e_attn.dmu    >> block.attention.E_attn.inputs
-                    block.attention.E_attn.outputs >> block.attention.z_attn.j
+                    #  V path 
+                    block.attention.e_attn.dmu  >> block.ln1_grad_v.dmu
+                    block.ln1.inputs            >> block.ln1_grad_v.mu
+                    block.ln1.rms               >> block.ln1_grad_v.rms
+                    block.attention.attn_block.dv >> block.ln1_grad_v.dmu_attn
+                    block.ln1_grad_v.dmu_       >> block.attention.z_qkv.jv
  
                     # top-down error into z_qkv
                     if blocks == 0:
@@ -187,11 +193,11 @@ class NGCTransformer:
                     block.mlp.e_mlp.dmu  >> block.mlp.E_mlp.inputs
  
                     # E_mlp output -> ln2_grad -> z_mlp.j
-                    # block.mlp.E_mlp.outputs  >> block.ln2_grad.dmu
-                    # block.ln2.inputs         >> block.ln2_grad.mu
-                    # block.ln2.rms            >> block.ln2_grad.rms
-                    # block.ln2_grad.dmu_      >> block.mlp.z_mlp.j
-                    block.mlp.E_mlp1.outputs >> block.mlp.z_mlp.j
+                    block.mlp.e_mlp.dmu  >> block.ln2_grad.dmu
+                    block.ln2.inputs         >> block.ln2_grad.mu
+                    block.ln2.rms            >> block.ln2_grad.rms
+                    block.ln2_grad.dmu_      >> block.mlp.z_mlp.j
+                    #block.mlp.E_mlp1.outputs >> block.mlp.z_mlp2.j
                     #block.mlp.E_mlp1.outputs >> block.mlp.z_mlp2.j
  
                     block.mlp.E_mlp.outputs >> block.mlp.z_mlp2.j
@@ -201,24 +207,23 @@ class NGCTransformer:
 
 
                     #  Hebbian pre/post wiring 
-                    block.ln1.outputs                       >> block.attention.W_q.pre
-                    block.attention.attn_block.dtarget_q    >> block.attention.W_q.post
+                    block.ln1.outputs       >> block.attention.W_q.pre
+                    block.ln1_grad_q.dmu_   >> block.attention.W_q.post
  
-                    block.ln1.outputs                       >> block.attention.W_k.pre
-                    block.attention.attn_block.dtarget_k    >> block.attention.W_k.post
+                    block.ln1.outputs       >> block.attention.W_k.pre
+                    block.ln1_grad_k.dmu_   >> block.attention.W_k.post
  
-                    block.ln1.outputs                       >> block.attention.W_v.pre
-                    block.attention.attn_block.dtarget_v    >> block.attention.W_v.post
+                    block.ln1.outputs       >> block.attention.W_v.pre
+                    block.ln1_grad_v.dmu_   >> block.attention.W_v.post
  
-                    block.attention.z_attn.zF               >> block.attention.W_attn_out.pre
-                    block.attention.e_attn.dmu              >> block.attention.W_attn_out.post
+                    block.attention.z_attn.zF    >> block.attention.W_attn_out.pre
+                    block.attention.e_attn.dmu   >> block.attention.W_attn_out.post
  
-                    # W_mlp1/2: pre = ln2 output, post = error signal
-                    block.ln2.outputs        >> block.mlp.W_mlp1.pre
-                    block.mlp.e_mlp1.dmu     >> block.mlp.W_mlp1.post
+                    block.ln2.outputs       >> block.mlp.W_mlp1.pre
+                    block.mlp.e_mlp1.dmu    >> block.mlp.W_mlp1.post
  
-                    block.mlp.z_mlp2.zF      >> block.mlp.W_mlp2.pre
-                    block.mlp.e_mlp.dmu      >> block.mlp.W_mlp2.post
+                    block.mlp.z_mlp2.zF     >> block.mlp.W_mlp2.pre
+                    block.mlp.e_mlp.dmu     >> block.mlp.W_mlp2.post
 
 
                         
@@ -328,13 +333,16 @@ class NGCTransformer:
                     advance_process >> block.attention.E_k.advance_state
                     advance_process >> block.attention.E_v.advance_state
                     advance_process >> block.attention.E_attn.advance_state
-                    advance_process >> block.ln1_grad.advance_state   # backward norm
+                    advance_process >> block.ln1_grad_q.advance_state
+                    advance_process >> block.ln1_grad_k.advance_state
+                    advance_process >> block.ln1_grad_v.advance_state
+                    #advance_process >> block.ln1_grad.advance_state   # backward norm
                     advance_process >> block.ln2.advance_state
                     advance_process >> block.mlp.W_mlp1.advance_state
                     advance_process >> block.mlp.W_mlp2.advance_state
                     advance_process >> block.mlp.E_mlp1.advance_state
                     advance_process >> block.mlp.E_mlp.advance_state
-                    #advance_process >> block.ln2_grad.advance_state   # backward norm
+                    advance_process >> block.ln2_grad.advance_state   # backward norm
 
                     # e nodes
                     advance_process >> block.attention.e_qkv.advance_state
@@ -364,7 +372,10 @@ class NGCTransformer:
                     block = self.blocks[i]
 
                     reset_process >> block.ln1.reset
-                    reset_process >> block.ln1_grad.reset
+                    reset_process >> block.ln1_grad_q.reset
+                    reset_process >> block.ln1_grad_k.reset
+                    reset_process >> block.ln1_grad_v.reset
+                    #reset_process >> block.ln1_grad.reset
                     reset_process >> block.attention.z_qkv.reset
                     reset_process >> block.attention.z_attn.reset
                     reset_process >> block.attention.e_qkv.reset
@@ -375,7 +386,7 @@ class NGCTransformer:
                     reset_process >> block.reshape_2d_to_3d_v.reset
                     reset_process >> block.reshape_3d_to_2d_attnout.reset
                     reset_process >> block.ln2.reset
-                    #reset_process >> block.ln2_grad.reset
+                    reset_process >> block.ln2_grad.reset
                     reset_process >> block.mlp.z_mlp.reset
                     reset_process >> block.mlp.z_mlp2.reset
                     reset_process >> block.mlp.e_mlp.reset
