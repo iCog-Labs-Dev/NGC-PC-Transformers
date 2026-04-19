@@ -85,7 +85,7 @@ def rms_norm_grad(x, rms, gamma, v):
     """
     gamma  = gamma.reshape((1,) * (v.ndim - 1) + (-1,)).astype(x.dtype)
     x_norm = x / rms                                           # (batch, n_embed)
-    gv     = gamma * v                                         # (batch, n_embed)
+    gv     = gamma.reshape((1,) * (v.ndim - 1) + (-1,)) * v                                      # (batch, n_embed)
     inner  = jnp.mean(x_norm * gv, axis=-1, keepdims=True)   # (batch, 1)
     dx     = (gamma / rms) * (v - x_norm * inner)
     return dx
@@ -187,12 +187,9 @@ class RMSNormGrad(JaxComponent):
         self.mu        = Compartment(jnp.zeros((batch_size, n_embed)))
         self.rms       = Compartment(jnp.ones((batch_size, 1)))
         self.dmu       = Compartment(jnp.zeros((batch_size, n_embed)))
-        # ── NEW compartment ──────────────────────────────────────────────────
-        # Receives dq / dk / dv from attn_block for the Q/K/V paths.
-        # For the MLP path (ln2_grad) this is never wired and stays at ones,
-        # so the multiply below is a no-op and behaviour is unchanged.
+
         self.dmu_attn  = Compartment(jnp.ones((batch_size, n_embed)))
-        # ─────────────────────────────────────────────────────────────────────
+    
         self.dmu_      = Compartment(jnp.zeros((batch_size, n_embed)))
 
     @compilable
