@@ -155,31 +155,36 @@ class NGCTransformer:
 
                     # Backward attention errors 
                     block.attention.e_qkv.dmu >> block.attention.attn_block.dmu
-                    block.attention.attn_block.dq >> block.attention.E_q.inputs
-                    block.attention.attn_block.dk >> block.attention.E_k.inputs
-                    block.attention.attn_block.dv >> block.attention.E_v.inputs
+                    
 
                     # RMSNorm gradient corrects error before entering z_qkv
                     #q path
-                    block.attention.e_attn.dmu  >> block.ln1_grad_q.dmu
-                    block.ln1.inputs            >> block.ln1_grad_q.mu
+                    block.ln1.inputs          >> block.ln1_grad_q.mu
                     block.ln1.rms               >> block.ln1_grad_q.rms
-                    block.attention.attn_block.dq >> block.ln1_grad_q.dmu_attn
-                    block.ln1_grad_q.dmu_       >> block.attention.z_qkv.jq
+                    block.attention.e_attn.dmu    >> block.ln1_grad_q.dmu
+                    block.attention.attn_block.dq >> block.attention.E_q.inputs
+                    block.attention.E_q.outputs      >> block.ln1_grad_q.dmu_attn
+                    block.ln1_grad_q.dmu_ >> block.attention.z_qkv.jq
  
                     #  K path 
-                    block.attention.e_attn.dmu  >> block.ln1_grad_k.dmu
-                    block.ln1.inputs            >> block.ln1_grad_k.mu
+                    #block.attention.e_attn.dmu  >> block.ln1_grad_k.dmu
+                    block.ln1.inputs          >> block.ln1_grad_k.mu
                     block.ln1.rms               >> block.ln1_grad_k.rms
-                    block.attention.attn_block.dk >> block.ln1_grad_k.dmu_attn
-                    block.ln1_grad_k.dmu_       >> block.attention.z_qkv.jk
- 
-                    #  V path 
-                    block.attention.e_attn.dmu  >> block.ln1_grad_v.dmu
-                    block.ln1.inputs            >> block.ln1_grad_v.mu
+                    block.attention.e_attn.dmu    >> block.ln1_grad_k.dmu
+                    block.attention.attn_block.dk >> block.attention.E_k.inputs
+                    block.attention.E_k.outputs      >> block.ln1_grad_k.dmu_attn
+                    block.ln1_grad_k.dmu_  >> block.attention.z_qkv.jk
+                    #  V path  
+                    block.ln1.inputs           >> block.ln1_grad_v.mu
                     block.ln1.rms               >> block.ln1_grad_v.rms
-                    block.attention.attn_block.dv >> block.ln1_grad_v.dmu_attn
-                    block.ln1_grad_v.dmu_       >> block.attention.z_qkv.jv
+                    block.attention.e_attn.dmu    >> block.ln1_grad_v.dmu
+                    block.attention.attn_block.dv >> block.attention.E_v.inputs
+                    block.attention.E_v.outputs      >> block.ln1_grad_v.dmu_attn
+                    block.ln1_grad_v.dmu_ >> block.attention.z_qkv.jv
+
+                    # e_attn → E_attn → z_attn.j  (no ln on this path)
+                    block.attention.e_attn.dmu     >> block.attention.E_attn.inputs
+                    block.attention.E_attn.outputs >> block.attention.z_attn.j
  
                     # top-down error into z_qkv
                     if blocks == 0:
@@ -189,38 +194,44 @@ class NGCTransformer:
                     block.attention.e_qkv.dtarget >> block.attention.z_attn.j_td
 
                     #  Backward MLP errors 
-                    block.mlp.e_mlp1.dmu >> block.mlp.E_mlp1.inputs
-                    block.mlp.e_mlp.dmu  >> block.mlp.E_mlp.inputs
+                    #block.mlp.e_mlp1.dmu >> block.mlp.E_mlp1.inputs
+                    
+                    #block.mlp.e_mlp.dmu  >> block.mlp.E_mlp.inputs
  
                     # E_mlp output -> ln2_grad -> z_mlp.j
-                    block.mlp.e_mlp.dmu  >> block.ln2_grad.dmu
-                    block.ln2.inputs         >> block.ln2_grad.mu
-                    block.ln2.rms            >> block.ln2_grad.rms
-                    block.ln2_grad.dmu_      >> block.mlp.z_mlp.j
-                    #block.mlp.E_mlp1.outputs >> block.mlp.z_mlp2.j
-                    #block.mlp.E_mlp1.outputs >> block.mlp.z_mlp2.j
- 
-                    block.mlp.E_mlp.outputs >> block.mlp.z_mlp2.j
- 
+                    block.ln2.rms >> block.ln2_grad.rms
+                    block.mlp.z_mlp.zF >> block.ln2_grad.mu # dummy connection to carry activations for attention modulation (not wired in this design)
+                     
+
+                    # E_mlp1 — backward signal for z_mlp2 state 
+                    block.mlp.e_mlp1.dmu     >> block.mlp.E_mlp1.inputs  # (18,64) → E_mlp1(64,16)
+                    block.mlp.E_mlp1.outputs >> block.ln2_grad.dmu
+                    block.ln2_grad.dmu_ >> block.mlp.z_mlp.j
+
+                    # E_mlp — backward signal for z_mlp2 from output error
+                    block.mlp.e_mlp.dmu      >> block.mlp.E_mlp.inputs   # (18,16) → E_mlp(16,64)
+                    block.mlp.E_mlp.outputs  >> block.mlp.z_mlp2.j 
+
                     block.attention.e_attn.dtarget >> block.mlp.z_mlp.j_td
                     block.mlp.e_mlp1.dtarget       >> block.mlp.z_mlp2.j_td
 
 
                     #  Hebbian pre/post wiring 
                     block.ln1.outputs       >> block.attention.W_q.pre
-                    block.ln1_grad_q.dmu_   >> block.attention.W_q.post
+                    block.ln1_grad_q.dmu_mlp1   >> block.attention.W_q.post
  
                     block.ln1.outputs       >> block.attention.W_k.pre
-                    block.ln1_grad_k.dmu_   >> block.attention.W_k.post
+                    block.ln1_grad_k.dmu_mlp1   >> block.attention.W_k.post
  
                     block.ln1.outputs       >> block.attention.W_v.pre
-                    block.ln1_grad_v.dmu_   >> block.attention.W_v.post
+                    block.ln1_grad_v.dmu_mlp1  >> block.attention.W_v.post
  
                     block.attention.z_attn.zF    >> block.attention.W_attn_out.pre
                     block.attention.e_attn.dmu   >> block.attention.W_attn_out.post
  
                     block.ln2.outputs       >> block.mlp.W_mlp1.pre
-                    block.mlp.e_mlp1.dmu    >> block.mlp.W_mlp1.post
+                    #block.ln2_grad.dmu_      >> block.mlp.W_mlp1.pre
+                    block.mlp.e_mlp1.dmu     >> block.mlp.W_mlp1.post
  
                     block.mlp.z_mlp2.zF     >> block.mlp.W_mlp2.pre
                     block.mlp.e_mlp.dmu     >> block.mlp.W_mlp2.post
@@ -569,9 +580,27 @@ class NGCTransformer:
             block_proj.reshape_3d_to_2d_proj1.outputs.set(self.circuit.get_components(f"{p_prefix}_reshape_3d_to_2d_proj1").outputs.get())
             block_proj.q_attn_block = self.circuit.get_components(f"{p_prefix}_q_attn_block")
           
-
+    
     def process(self, obs, lab, adapt_synapses=True):
-        
+        # print("obs shape:", obs.shape)
+        # print("E_mlp1 weights shape:", self.blocks[0].mlp.E_mlp1.weights.get().shape)
+        # print("E_mlp weights shape:", self.blocks[0].mlp.E_mlp.weights.get().shape)
+        # print("E_mlp1 weights:", self.blocks[0].mlp.E_mlp1.weights.get().shape)
+        # print("E_mlp weights:", self.blocks[0].mlp.E_mlp.weights.get().shape)
+        # print("E_q weights:", self.blocks[0].attention.E_q.weights.get().shape)
+        # print("E_k weights:", self.blocks[0].attention.E_k.weights.get().shape)
+        # print("E_v weights:", self.blocks[0].attention.E_v.weights.get().shape)
+        # print("E_attn weights:", self.blocks[0].attention.E_attn.weights.get().shape)
+        # print("E_out weights:", self.output.E_out.weights.get().shape)
+        # print("ln2 inputs shape:", self.blocks[0].ln2.inputs.get().shape)
+        # print("ln2 outputs shape:", self.blocks[0].ln2.outputs.get().shape)
+        # print("W_mlp1 inputs shape:", self.blocks[0].mlp.W_mlp1.inputs.get().shape)
+        # print("z_mlp zF shape:", self.blocks[0].mlp.z_mlp.zF.get().shape)
+        # print("ln1_grad_q dmu_attn:", self.blocks[0].ln1_grad_q.dmu_attn.get().shape)
+        # print("ln1_grad_q dmu:", self.blocks[0].ln1_grad_q.dmu.get().shape)
+        # print("ln2_grad dmu:", self.blocks[0].ln2_grad.dmu.get().shape)
+        # print("ln2_grad dmu_attn:", self.blocks[0].ln2_grad.dmu_attn.get().shape)
+        # print("ln2_grad mu:", self.blocks[0].ln2_grad.mu.get().shape)
         self.reset.run()
         # self.projection.Q_embed.word_weights.set(self.embedding.W_embed.word_weights.get())
         # if self.embedding.W_embed.pos_learnable:
@@ -618,6 +647,7 @@ class NGCTransformer:
             b.attention.E_attn.weights.set(jnp.transpose(b.attention.W_attn_out.weights.get()))
             b.mlp.E_mlp.weights.set(jnp.transpose(b.mlp.W_mlp2.weights.get()))  
             b.mlp.E_mlp1.weights.set(jnp.transpose(b.mlp.W_mlp1.weights.get()))
+            #b.mlp.E_mlp1.weights.set(b.mlp.W_mlp1.weights.get())
        
         self.output.E_out.weights.set(jnp.transpose(self.output.W_out.weights.get()))
         # self.output.z_out.z.set(self.projection.q_out_Ratecell.z.get())
