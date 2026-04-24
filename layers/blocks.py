@@ -9,30 +9,30 @@ from utils.rms_norm_util import RMSNorm, RMSNormGrad
 
 class Block:
     """
-    One transformer block: ln1 → Attention → ln2 → MLP
+    One transformer block with RMSNorm in both forward and backward paths.
 
-    Layer norm placement
-    ─────────────────────
     Forward:
         z_qkv.zF  →  ln1  →  W_q / W_k / W_v  →  attn_block  →  ...
         z_mlp.zF  →  ln2  →  W_mlp1            →  z_mlp2      →  ...
 
-    Backward (new — mentor task):
-        For each of Q, K, V:
-            e_attn.dmu  →  ln1_grad_q/k/v.dmu       (incoming error)
-            ln1.inputs  →  ln1_grad_q/k/v.mu         (saved forward x)
-            ln1.rms     →  ln1_grad_q/k/v.rms        (saved forward rms)
-            attn_block.dq/dk/dv  →  ln1_grad_q/k/v.dmu_attn  ← NEW compartment
-            ln1_grad_q/k/v.dmu_  →  z_qkv.jq/jk/jv  (corrected state update)
-            ln1_grad_q/k/v.dmu_  →  W_q/k/v.post     (corrected Hebbian post)
+    Backward 
+        For Q path:
+            ln1_grad_q.mu       ← z_qkv.z          (forward input to ln1)
+            ln1_grad_q.rms      ← ln1.rms           (saved rms)
+            ln1_grad_q.dmu      ← e_attn.dmu        (incoming error)
+            ln1_grad_q.dmu_attn ← attn_block.dq     (Q-specific gradient)
+            ln1_grad_q.dmu_     →  E_q  →  z_qkv.jq (state update)
+            ln1_grad_q.dmu_mlp1 →  W_q.post          (Hebbian post)
 
-        For MLP:
-            e_mlp1.dmu  →  ln2_grad.dmu
-            ln2.inputs  →  ln2_grad.mu
-            ln2.rms     →  ln2_grad.rms
-            (ln2_grad.dmu_attn left unwired — stays ones, so multiply is no-op)
-            ln2_grad.dmu_  →  z_mlp.j
-            ln2_grad.dmu_  →  W_mlp1.post
+        Same pattern for K and V paths using ln1_grad_k, ln1_grad_v.
+
+        For MLP path:
+            ln2_grad.mu         ← z_mlp.z
+            ln2_grad.rms        ← ln2.rms
+            ln2_grad.dmu        ← e_mlp1.dmu
+            (dmu_attn not wired — stays ones)
+            ln2_grad.dmu_       →  E_mlp1  →  z_mlp.j
+            ln2_grad.dmu_       →  W_mlp1.post
     """
 
     def __init__(self, dkey, block_id, n_embed, seq_len, vocab_size,
@@ -47,25 +47,16 @@ class Block:
         self.ln1 = RMSNorm(f"{prefix}ln1", n_embed=n_embed, batch_size=bs)
         self.ln2 = RMSNorm(f"{prefix}ln2", n_embed=n_embed, batch_size=bs)
 
-        # ── Backward norm-grad components ─────────────────────────────────────
-        # Three separate instances for Q / K / V paths.
-        # Each receives its own attention gradient (dq / dk / dv) via
-        # the new .dmu_attn compartment in RMSNormGrad.
-        self.ln1_grad_q = RMSNormGrad(
-            f"{prefix}ln1_grad_q", n_embed=n_embed,
-            batch_size=bs, gamma=self.ln1.gamma)
-        self.ln1_grad_k = RMSNormGrad(
-            f"{prefix}ln1_grad_k", n_embed=n_embed,
-            batch_size=bs, gamma=self.ln1.gamma)
-        self.ln1_grad_v = RMSNormGrad(
-            f"{prefix}ln1_grad_v", n_embed=n_embed,
-            batch_size=bs, gamma=self.ln1.gamma)
-
-        # One instance for the MLP path.
-        # dmu_attn is never wired → stays ones → multiply is identity.
-        self.ln2_grad = RMSNormGrad(
-            f"{prefix}ln2_grad", n_embed=n_embed,
-            batch_size=bs, gamma=self.ln2.gamma)
+        # ── Backward norm-grad — three for attention (Q/K/V), one for MLP ─────
+        self.ln1_grad_q = RMSNormGrad(f"{prefix}ln1_grad_q", n_embed=n_embed,
+                                      batch_size=bs, gamma=self.ln1.gamma)
+        self.ln1_grad_k = RMSNormGrad(f"{prefix}ln1_grad_k", n_embed=n_embed,
+                                      batch_size=bs, gamma=self.ln1.gamma)
+        self.ln1_grad_v = RMSNormGrad(f"{prefix}ln1_grad_v", n_embed=n_embed,
+                                      batch_size=bs, gamma=self.ln1.gamma)
+        # ln2_grad: dmu_attn never wired → stays ones → MLP path unaffected
+        self.ln2_grad = RMSNormGrad(f"{prefix}ln2_grad", n_embed=n_embed,
+                                    batch_size=bs, gamma=self.ln2.gamma)
 
         # ── Attention and MLP sub-layers ──────────────────────────────────────
         self.attention = Attention(
@@ -82,21 +73,16 @@ class Block:
         # ── Reshape helpers ───────────────────────────────────────────────────
         self.reshape_2d_to_3d_q = ReshapeComponent(
             f"{prefix}reshape_2d_to_3d_q",
-            input_shape=(bs, n_embed),
-            output_shape=(batch_size, seq_len, n_embed))
+            input_shape=(bs, n_embed), output_shape=(batch_size, seq_len, n_embed))
         self.reshape_2d_to_3d_k = ReshapeComponent(
             f"{prefix}reshape_2d_to_3d_k",
-            input_shape=(bs, n_embed),
-            output_shape=(batch_size, seq_len, n_embed))
+            input_shape=(bs, n_embed), output_shape=(batch_size, seq_len, n_embed))
         self.reshape_2d_to_3d_v = ReshapeComponent(
             f"{prefix}reshape_2d_to_3d_v",
-            input_shape=(bs, n_embed),
-            output_shape=(batch_size, seq_len, n_embed))
+            input_shape=(bs, n_embed), output_shape=(batch_size, seq_len, n_embed))
         self.reshape_3d_to_2d_attnout = ReshapeComponent(
             f"{prefix}reshape_3d_to_2d_attnout",
-            input_shape=(batch_size, seq_len, n_embed),
-            output_shape=(bs, n_embed))
+            input_shape=(batch_size, seq_len, n_embed), output_shape=(bs, n_embed))
         self.reshape_3d_to_2d = ReshapeComponent(
             f"{prefix}reshape_3d_to_2d",
-            input_shape=(batch_size, seq_len, n_embed),
-            output_shape=(bs, n_embed))
+            input_shape=(batch_size, seq_len, n_embed), output_shape=(bs, n_embed))
