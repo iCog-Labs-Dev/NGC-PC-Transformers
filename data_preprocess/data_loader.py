@@ -28,36 +28,30 @@ class DataLoader:
         return train_loader, valid_loader, test_loader
 
     def _create_data_loader(self, tokens, shuffle):
-        """Create sequences with configurable stride"""
-        window_size = self.seq_len + 1  # 209 tokens per sequence
-        
-        if self.stride == self.seq_len:
-            # Non-overlapping (PyTorch style) - more efficient
-            total_len = (len(tokens) // window_size) * window_size
-            tokens = tokens[:total_len]
-            num_sequences = total_len // window_size
-            sequences = tokens.reshape(num_sequences, window_size)
+        """Create sequences and return NGC DataLoader"""
+        window_size = self.seq_len + 1
+        stride = self.seq_len
+        n_tokens = len(tokens)
+        num_sequences = (n_tokens - window_size) // stride + 1
+
+        if num_sequences <= 0:
+            padded_tokens = jnp.concatenate([
+                tokens,
+                jnp.full((window_size - len(tokens),), self.pad_token)
+            ])
+            sequences = padded_tokens.reshape(1, -1)
         else:
-            # Sliding window with custom stride
-            num_sequences = (len(tokens) - window_size) // self.stride + 1
-            if num_sequences <= 0:
-                # Handle insufficient data
-                sequences = jnp.full((1, window_size), self.pad_token)
-                sequences[0, :len(tokens)] = tokens
-            else:
-                # Extract sequences with given stride
-                sequences = []
-                for i in range(0, len(tokens) - window_size + 1, self.stride):
-                    sequences.append(tokens[i:i + window_size])
-                sequences = jnp.stack(sequences)
-        
-        # Split into inputs and targets
-        inputs = sequences[:, :-1]    # Shape: [num_sequences, seq_len]
-        targets = sequences[:, 1:]    # Shape: [num_sequences, seq_len]
+            indices = np.arange(num_sequences) * stride
+            sequences = np.array([tokens[i:i + window_size] for i in indices])
+
+
+        inputs = sequences[:, :-1]
+        targets = sequences[:, 1:]
         
         # Create mask (ignore padding tokens if any)
         mask = (targets != self.pad_token).astype(jnp.float32)
         
+                
         return NGCDataLoader(
             design_matrices=[
                 ("inputs", inputs), 

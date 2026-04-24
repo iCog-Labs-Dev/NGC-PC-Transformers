@@ -668,7 +668,8 @@ class NGCTransformer:
              
             self.advance.run(t=ts,dt=1.)
            
-        y_mu = self.output.W_out.outputs.get() 
+        # y_mu = self.output.W_out.outputs.get() 
+        y_mu = self.z_actfx.zF.get() 
 
         L1 = self.embedding.e_embed.L.get()
         L4 = self.output.e_out.L.get()

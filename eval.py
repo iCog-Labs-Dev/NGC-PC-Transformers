@@ -6,7 +6,6 @@ from model import NGCTransformer
 from ngclearn.utils.metric_utils import measure_CatNLL
 from data_preprocess.data_loader import DataLoader
 from config import Config as config
-import jax.random as random
 import time
 
 def eval_model(model: NGCTransformer, data_loader, vocab_size: int):
@@ -14,36 +13,26 @@ def eval_model(model: NGCTransformer, data_loader, vocab_size: int):
     Runs inference-only forward pass on a data loader and returns
     cross-entropy and perplexity.
     """
-    start_time = time.time()
     total_nll = 0.0
     total_tokens = 0
-    batch_idx = 0
 
-    for batch in data_loader:
-        inputs = batch[0][1]         
-        targets = batch[1][1]        
+    for batch_idx, batch in enumerate(data_loader):
+        inputs = batch[0][1]
+        targets = batch[1][1]
 
-       
         targets_flat = jax.nn.one_hot(targets.flatten(), vocab_size)
-        yMu_inf, y_mu, _ = model.process(obs=inputs,
-                                      lab=targets_flat,
-                                      adapt_synapses=False)
+        _, y_mu, _ = model.process(obs=inputs,
+                                   lab=targets_flat,
+                                   adapt_synapses=False)
 
-        y_pred = y_mu.reshape(-1, vocab_size)   
-
-        total_nll += measure_CatNLL(y_pred, targets_flat) * targets_flat.shape[0]
+        y_pred = y_mu.reshape(-1, vocab_size)
+        batch_ce_loss = measure_CatNLL(y_pred, targets_flat).mean()
+        total_nll += batch_ce_loss * targets_flat.shape[0]
         total_tokens += targets_flat.shape[0]
-        
+
         if batch_idx % 10 == 0:
-            y_pred = y_mu.reshape(-1, vocab_size)
-            y_true = targets_flat
-            
-            batch_nll = measure_CatNLL(y_pred, y_true)
-            batch_ce_loss = batch_nll.mean()  
             batch_ppl = jnp.exp(batch_ce_loss)
             print(f" Eval Batch {batch_idx}: | CE = {batch_ce_loss:.4f} | PPL = {batch_ppl:.4f}")
-
-        batch_idx += 1
 
     ce = total_nll / total_tokens
     ppl = jnp.exp(ce)
@@ -83,7 +72,7 @@ def load_weights_into_model(model, model_dir):
 
 if __name__ == "__main__":
     
-    dkey = random.PRNGKey(0)
+    dkey = jax.random.PRNGKey(0)
     model = NGCTransformer(
         dkey=dkey,
         batch_size=config.batch_size,
