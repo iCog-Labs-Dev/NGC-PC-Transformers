@@ -12,7 +12,7 @@ class Config:
     exp_dir = "exp" 
     pos_learnable = True
     optim_type = "sgd"
-    epoch = 1
+    epoch = 20
     n_iter= 26
     tau_o = 2
     # Approximate Xavier scaling: 1 / sqrt(512) is about 0.04
@@ -25,10 +25,7 @@ class Config:
     act_fx_o = "identity"
 
     # Tokenizer selection: "BPE" (custom/BPE loader) or "tiktoken"
-    tokenizer = "BPE"
-    # When tokenizer == "tiktoken", tokenizer_name is used (e.g. "gpt2" or "cl100k_base")
-    tokenizer_name = "gpt2"
+    tokenizer = "tiktoken"
+    tokenizer_encoding = "o200k_base"
 
-    # When tokenizer == "BPE", tokenizer_vocab_file may point to a vocab json or a newline token list.
-    # Optional: set to None to use a simple fallback whitespace tokenizer.
     tokenizer_vocab_file = None
