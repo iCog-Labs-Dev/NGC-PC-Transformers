@@ -21,10 +21,6 @@ except ImportError:
     print("Using default vocab_size: 12000")
 
 
-# ---------------------------------------------------------------------------
-# BPE Tokenizer (custom, trained on your data)
-# ---------------------------------------------------------------------------
-
 class BPETokenizer:
     def __init__(self, vocab_size: int = VOCAB_SIZE):
         self.vocab_size = vocab_size
@@ -113,17 +109,7 @@ class BPETokenizer:
         np.save(f"{save_dir}/test_tokens.npy", np.array(test_tokens))
 
 
-# ---------------------------------------------------------------------------
-# Tiktoken Tokenizer  (uses OpenAI's real tiktoken library)
-#
-# Encoding guide (pick the best one for your use case):
-#   "o200k_base"  – GPT-4o / GPT-4o-mini  (200k vocab, most recent)  ← default
-#   "cl100k_base" – GPT-4 / GPT-3.5-turbo  (100k vocab)
-#   "p50k_base"   – text-davinci-003 / Codex  (50k vocab)
-#   "gpt2"        – GPT-2  (50k vocab, oldest)
-# ---------------------------------------------------------------------------
 
-# Best / latest encoding available in tiktoken as of 2025
 _BEST_ENCODING = "o200k_base"
 
 

@@ -12,7 +12,7 @@ class Config:
     exp_dir = "exp" 
     pos_learnable = True
     optim_type = "sgd"
-    epoch = 20
+    epoch = 1
     n_iter= 26
     tau_o = 2
     # Approximate Xavier scaling: 1 / sqrt(512) is about 0.04
