@@ -1,5 +1,6 @@
 from jax import numpy as jnp, random, jit
 
+from config import Config as config
 from ngclearn import compilable 
 from ngclearn import Compartment 
 from ngclearn.components.jaxComponent import JaxComponent
@@ -8,6 +9,7 @@ from ngclearn.utils.model_utils import create_function, threshold_soft, \
 from ngclearn.utils.diffeq.ode_utils import get_integrator_code, \
                                             step_euler, step_rk2, step_rk4
 from ngcsimlib.logger import info
+
 
 
 def _dfz_internal_laplace(z, j, j_td, tau_m, leak_gamma): ## raw dynamics
@@ -204,6 +206,8 @@ class AttnRateCell(JaxComponent): ## Rate-coded/real-valued cell
             omega_0 = this_class_kwargs["omega_0"]
         self.fx, self.dfx = create_function(fun_name=act_fx, args=omega_0)
 
+        self.use_residual = kwargs.get("use_residual", getattr(config, "use_residual", False))
+
         # compartments (state of the cell & parameters will be updated through stateless calls)
         restVals = jnp.zeros(_shape)
         self.j = Compartment(restVals, display_name="Input Stimulus Current", units="mA") # electrical current
@@ -222,7 +226,7 @@ class AttnRateCell(JaxComponent): ## Rate-coded/real-valued cell
         jk = self.jk.get()
         j_td = self.j_td.get()
 
-        if getattr(config, "use_residual", False):
+        if self.use_residual:
             j_in = self.j.get()
             j = j_in + (jv + jq + jk)
         else:
