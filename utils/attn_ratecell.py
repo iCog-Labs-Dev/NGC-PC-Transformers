@@ -218,12 +218,13 @@ class AttnRateCell(JaxComponent): ## Rate-coded/real-valued cell
     def advance_state(self, dt):
         # Get the compartment values
 
+        j_in = self.j.get()
         jv = self.jv.get()
         jq = self.jq.get()
         jk = self.jk.get()
         j_td = self.j_td.get()
 
-        j = (jv + jq + jk)
+        j = j_in + (jv + jq + jk)
         z = self.z.get()
 
         #if tau_m > 0.:
