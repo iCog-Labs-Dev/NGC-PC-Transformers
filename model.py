@@ -131,7 +131,7 @@ class NGCTransformer:
                     
                     block.attention.z_attn.zF >>block.attention.W_attn_out.inputs 
                     if getattr(config, "use_residual", False):
-                        block.attention.z_qkv.zF >> block.res1.x1
+                        block.attention.z_attn.z >> block.res1.x1
                         block.attention.W_attn_out.outputs >> block.res1.x2
                         block.res1.outputs >> block.attention.e_attn.mu
                     else:
@@ -149,7 +149,7 @@ class NGCTransformer:
 
                     block.mlp.z_mlp2.zF >> block.mlp.W_mlp2.inputs
                     if getattr(config, "use_residual", False):
-                        block.mlp.z_mlp.zF >> block.res2.x1
+                        block.mlp.z_mlp.z >> block.res2.x1
                         block.mlp.W_mlp2.outputs >> block.res2.x2
                         block.res2.outputs >> block.mlp.e_mlp.mu
                     else:
@@ -163,24 +163,20 @@ class NGCTransformer:
                         self.blocks[blocks + 1].attention.z_qkv.z >> block.mlp.e_mlp.target
 
                     block.mlp.e_mlp1.dmu >> block.mlp.W_mlp1.post_in
+                    block.mlp.e_mlp.dmu  >> block.mlp.W_mlp2.post_in
                     if getattr(config, "use_residual", False):
                         block.mlp.e_mlp.dmu >> block.res2.dmu
-                        block.res2.dx2 >> block.mlp.W_mlp2.post_in
                         block.res2.dx1 >> block.mlp.z_mlp.j
-                    else:
-                        block.mlp.e_mlp.dmu  >> block.mlp.W_mlp2.post_in
 
                     block.attention.e_qkv.dmu >> block.attention.attn_block.dmu
                     
                     block.attention.attn_block.dq >> block.attention.W_q.post_in
                     block.attention.attn_block.dk >> block.attention.W_k.post_in
                     block.attention.attn_block.dv >> block.attention.W_v.post_in
+                    block.attention.e_attn.dmu >> block.attention.W_attn_out.post_in
                     if getattr(config, "use_residual", False):
                         block.attention.e_attn.dmu >> block.res1.dmu
-                        block.res1.dx2 >> block.attention.W_attn_out.post_in
-                        block.res1.dx1 >> block.attention.z_qkv.j
-                    else:
-                        block.attention.e_attn.dmu >> block.attention.W_attn_out.post_in
+                        block.res1.dx1 >> block.attention.z_attn.j
                     
                     
                     block.attention.W_q.pre_out >>block.attention.z_qkv.jq
@@ -274,15 +270,15 @@ class NGCTransformer:
                     block_proj.q_attn_Ratecell.zF >> block_proj.Q_attn_out.inputs
                     block_proj.Q_attn_out.outputs >> block_proj.q_mlp_Ratecell.j
                     if getattr(config, "use_residual", False):
-                        block_proj.q_qkv_Ratecell.zF >> block_proj.q_mlp_Ratecell.j
+                        block_proj.q_attn_Ratecell.z >> block_proj.q_mlp_Ratecell.j
                     block_proj.q_mlp_Ratecell.zF >> block_proj.Q_mlp1.inputs
                     block_proj.Q_mlp1.outputs >> block_proj.q_mlp2_Ratecell.j
                     block_proj.q_mlp2_Ratecell.zF >> block_proj.Q_mlp2.inputs
                     if getattr(config, "use_residual", False):
                         if b == n_layers - 1:
-                            block_proj.q_mlp_Ratecell.zF >> self.projection.q_out_Ratecell.j
+                            block_proj.q_mlp_Ratecell.z >> self.projection.q_out_Ratecell.j
                         else:
-                            block_proj.q_mlp_Ratecell.zF >> self.projection.blocks[b + 1].q_qkv_Ratecell.j
+                            block_proj.q_mlp_Ratecell.z >> self.projection.blocks[b + 1].q_qkv_Ratecell.j
 
                 self.projection.blocks[n_layers - 1].Q_mlp2.outputs >> self.projection.q_out_Ratecell.j
                 self.projection.q_out_Ratecell.zF >> self.projection.Q_out.inputs
