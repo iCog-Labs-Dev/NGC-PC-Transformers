@@ -42,5 +42,5 @@ class Config:
     fused_advance = True
 
     # Global toggle for residual (skip) connections in transformer blocks
-    use_residual = True
+    use_residual = False
 
