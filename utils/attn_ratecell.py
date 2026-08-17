@@ -1,6 +1,5 @@
 from jax import numpy as jnp, random, jit
 
-from config import Config as config
 from ngclearn import compilable 
 from ngclearn import Compartment 
 from ngclearn.components.jaxComponent import JaxComponent
@@ -206,8 +205,6 @@ class AttnRateCell(JaxComponent): ## Rate-coded/real-valued cell
             omega_0 = this_class_kwargs["omega_0"]
         self.fx, self.dfx = create_function(fun_name=act_fx, args=omega_0)
 
-        self.use_residual = kwargs.get("use_residual", getattr(config, "use_residual", False))
-
         # compartments (state of the cell & parameters will be updated through stateless calls)
         restVals = jnp.zeros(_shape)
         self.j = Compartment(restVals, display_name="Input Stimulus Current", units="mA") # electrical current
@@ -226,11 +223,7 @@ class AttnRateCell(JaxComponent): ## Rate-coded/real-valued cell
         jk = self.jk.get()
         j_td = self.j_td.get()
 
-        if self.use_residual:
-            j_in = self.j.get()
-            j = j_in + (jv + jq + jk)
-        else:
-            j = (jv + jq + jk)
+        j = (jv + jq + jk)
         z = self.z.get()
 
         #if tau_m > 0.:
