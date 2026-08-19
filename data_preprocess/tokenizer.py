@@ -7,7 +7,6 @@ from pathlib import Path
 import numpy as np
 import sys
 import os
-from datasets_registry import prepare_dataset
 import json 
 """ to run: python -m data_preprocess.tokenizer """
 
@@ -32,21 +31,24 @@ class BPETokenizer:
     def __init__(self, vocab_size: int = VOCAB_SIZE):
         self.vocab_size = vocab_size
         self.tokenizer = None
-        self.data_dir, self.output_dir = prepare_dataset(getattr(config, "dataset", "tinyshakespeare"))
-
-
 
     def load_data(self, data_dir: str = None):
-        data_dir = Path(data_dir) if data_dir else self.data_dir
+        if data_dir is None:
+            data_dir = DIR / "data"
+        else:
+            data_dir = DIR / data_dir
+
+        data_dir = Path(data_dir)
+
         with open(data_dir / "train.txt", "r", encoding="utf-8") as f:
             train_text = f.read()
         with open(data_dir / "valid.txt", "r", encoding="utf-8") as f:
             valid_text = f.read()
         with open(data_dir / "test.txt", "r", encoding="utf-8") as f:
             test_text = f.read()
+
         all_text = train_text + valid_text + test_text
         return train_text, valid_text, test_text, all_text
-
 
     def train_tokenizer(self, all_text: str):
         self.tokenizer = Tokenizer(BPE(unk_token="<unk>"))
@@ -57,10 +59,8 @@ class BPETokenizer:
             special_tokens=["<pad>", "<unk>", "<bos>", "<eos>"],
             min_frequency=2
         )
-        lines = all_text.splitlines() or [all_text]
-        self.tokenizer.train_from_iterator(lines, trainer=trainer, length=len(lines))
 
-        
+        self.tokenizer.train_from_iterator([all_text], trainer=trainer)
 
     def load_tokenizer(self, path: str):
         """
@@ -71,23 +71,11 @@ class BPETokenizer:
             raise FileNotFoundError(f"Tokenizer file not found: {path}")
         self.tokenizer = Tokenizer.from_file(str(path))
 
-    
-
     def encode(self, text: str) -> jnp.ndarray:
         if self.tokenizer is None:
             raise ValueError("Tokenizer not trained/loaded.")
-        lines = text.splitlines() or [text]
-        chunk_size = 100_000
-        chunks = []
-        for i in range(0, len(lines), chunk_size):
-             batch = lines[i:i + chunk_size]
-             encodings = self.tokenizer.encode_batch(batch)
-             chunk_ids = np.fromiter(
-                (tid for enc in encodings for tid in enc.ids), dtype=np.int32
-             )
-             chunks.append(chunk_ids)
-        full_ids = np.concatenate(chunks) if chunks else np.array([], dtype=np.int32)
-        return jnp.array(full_ids, dtype=jnp.int32)
+        encoded = self.tokenizer.encode(text)
+        return jnp.array(encoded.ids, dtype=jnp.int32)
 
     def decode(self, tokens: jnp.ndarray) -> str:
         if self.tokenizer is None:
@@ -107,19 +95,19 @@ class BPETokenizer:
             raise ValueError("Tokenizer not trained/loaded.")
         return self.tokenizer.get_vocab_size()
 
-    
-
     def save_tokenizer(self, save_path: str = None):
         if self.tokenizer is None:
             raise ValueError("Tokenizer not trained/loaded.")
-        save_path = Path(save_path) if save_path else self.output_dir / "tokenizer"
+        if save_path is None:
+            save_path = DIR / "outputs" / "tokenizer"
+        else:
+            save_path = DIR / save_path
+
         Path(save_path).mkdir(parents=True, exist_ok=True)
         self.tokenizer.save(f"{save_path}/bpe_tokenizer.json")
 
-
-
-    def save_data(self, train_tokens, valid_tokens, test_tokens):
-        save_dir = self.output_dir / "tokenized_data"
+    def save_data(self, train_tokens: jnp.ndarray, valid_tokens: jnp.ndarray, test_tokens: jnp.ndarray):
+        save_dir = DIR / "outputs" / "tokenized_data"
         Path(save_dir).mkdir(parents=True, exist_ok=True)
         np.save(f"{save_dir}/train_tokens.npy", np.array(train_tokens))
         np.save(f"{save_dir}/valid_tokens.npy", np.array(valid_tokens))

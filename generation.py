@@ -160,10 +160,7 @@ if __name__ == "__main__":
     if isinstance(tokenizer, BPETokenizer) and tokenizer.tokenizer is None:
         vocab_file = getattr(config, "tokenizer_vocab_file", None)
         if vocab_file is None:
-            # default_path = Path(__file__).parent / "data_preprocess" / "outputs" / "tokenizer" / "bpe_tokenizer.json"
-            from data_preprocess.datasets_registry import prepare_dataset
-            _, output_dir = prepare_dataset(config.dataset)
-            default_path = output_dir / "tokenizer" / "bpe_tokenizer.json"
+            default_path = Path(__file__).parent / "data_preprocess" / "outputs" / "tokenizer" / "bpe_tokenizer.json"
             if default_path.exists():
                 vocab_file = str(default_path)
                 print(f"Auto-loading BPE tokenizer from default path: {vocab_file}")
