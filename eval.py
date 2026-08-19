@@ -29,7 +29,7 @@ def eval_model(model: NGCTransformer, data_loader, vocab_size: int):
                                    lab=targets_flat,
                                    adapt_synapses=False)
 
-        y_pred = y_mu.reshape(-1, vocab_size)
+        y_pred = y_mu_inf.reshape(-1, vocab_size)
         batch_ce_loss = measure_CatNLL(y_pred, targets_flat).mean()
         total_nll += batch_ce_loss * targets_flat.shape[0]
         total_tokens += targets_flat.shape[0]
@@ -97,7 +97,7 @@ if __name__ == "__main__":
         optim_type=config.optim_type,
         wub=config.wub,
         wlb=config.wlb,
-        generate =True, 
+        generate =False, 
     )
     data_loader = DataLoader(seq_len=config.seq_len, batch_size=config.batch_size)
     _, _, test_loader = data_loader.load_and_prepare_data()

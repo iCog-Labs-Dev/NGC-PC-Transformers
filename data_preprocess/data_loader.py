@@ -5,25 +5,19 @@ import sys
 import numpy as np
 DIR = Path(__file__).parent
 sys.path.append(str(DIR.parent))
-from data_preprocess.datasets_registry import prepare_dataset
-from config import Config as config
 
 class DataLoader:
-    def __init__(self, seq_len, batch_size, data_dir= None):
-        if data_dir is None:
-            _, output_dir = prepare_dataset(getattr(config, "dataset", "tinyshakespeare"))
-            data_dir = output_dir / "tokenized_data"
+    def __init__(self, seq_len, batch_size, data_dir= DIR / "outputs" / "tokenized_data"):
         self.data_dir = Path(data_dir)
         self.seq_len = seq_len
         self.batch_size = batch_size
         self.pad_token = -1
 
-
     def load_and_prepare_data(self):
         """Load tokenized data and prepare for training"""
-        train_tokens = np.load(self.data_dir / "train_tokens.npy")   # np.load, not jnp.load
-        valid_tokens = np.load(self.data_dir / "valid_tokens.npy")
-        test_tokens  = np.load(self.data_dir / "test_tokens.npy")
+        train_tokens = jnp.load(self.data_dir / "train_tokens.npy")
+        valid_tokens = jnp.load(self.data_dir / "valid_tokens.npy")
+        test_tokens = jnp.load(self.data_dir / "test_tokens.npy")
 
         train_loader = self._create_data_loader(train_tokens, shuffle=True)
         valid_loader = self._create_data_loader(valid_tokens, shuffle=False)

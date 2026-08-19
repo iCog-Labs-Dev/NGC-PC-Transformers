@@ -83,8 +83,7 @@ class Outgrad(JaxComponent):
         self.vocab_size = vocab_size
         self.batch_size = batch_size
         self.seq_len = seq_len
-        self.final = Compartment(jnp.zeros((batch_size * seq_len, vocab_size)))
-
+        
         self.mu = Compartment(jnp.zeros((batch_size * seq_len, vocab_size)))
         self.dmu = Compartment(jnp.zeros((batch_size * seq_len, vocab_size)))
         self.dmu_ = Compartment(jnp.zeros((batch_size * seq_len, vocab_size)))
@@ -95,13 +94,12 @@ class Outgrad(JaxComponent):
         
         mu = self.mu.get()        
         dmu = self.dmu.get()      
+        
         P, jvp_fn = d_softmax_vjp(mu, tau=0.0)
-        final = jnp.log(P)
         
         dmu_out = jvp_fn(dmu)
         
         self.dmu_.set(dmu_out)
-        self.final.set(final)
         
     @compilable
     def reset(self):
