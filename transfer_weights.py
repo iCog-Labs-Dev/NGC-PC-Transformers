@@ -69,10 +69,10 @@ NGC_MODEL_NAME = "ngc_transformer"
 # Scale factor applied to all transferred weight matrices.
 # Backprop-optimised weights produce error signals that are too large for the
 # PC Hebbian dynamics even after clipping to [wlb, wub].  Scaling them down
-# to ~20 % preserves the directional structure learned by backprop while
+# preserves the directional structure learned by backprop while
 # keeping the initial EFE in the same range as a random NGC-PC init.
 # Set to 1.0 to disable scaling.
-TRANSFER_SCALE = 0.20
+TRANSFER_SCALE = 0.05
 
 
 # ─────────────────────────────────────────────────────────────────────────────

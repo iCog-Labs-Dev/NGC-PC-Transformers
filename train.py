@@ -45,11 +45,21 @@ def main():
     else:
         print("[train] No pre-trained weights found — starting from random init.")
 
+    # When starting from pre-trained weights, use a 10× smaller eta for the
+    # first epoch to prevent Hebbian update spikes (which cause NaN).
+    # The PC model needs time to "settle in" to the transferred weight landscape
+    # before it can handle full-sized Hebbian updates.
+    fine_tune_eta = eta * 0.1 if loadDir else eta
+
     model = NGCTransformer(dkey, batch_size=batch_size, seq_len=seq_len, n_embed=n_embed, vocab_size=vocab_size, n_layers=n_layers, n_heads=n_heads,
-                          T=T, dt=1., tau_m=tau_m , act_fx=act_fx, eta=eta, dropout_rate= dropout_rate, exp_dir="exp",
+                          T=T, dt=1., tau_m=tau_m , act_fx=act_fx, eta=fine_tune_eta, dropout_rate= dropout_rate, exp_dir="exp",
                   loadDir=loadDir, pos_learnable= pos_learnable, optim_type=optim_type, wub = wub, wlb= wlb, model_name="ngc_transformer", generate =False )
 
+    if loadDir:
+        print(f" [train] Fine-tuning eta = {fine_tune_eta:.2e}  (10x warmup from pretrained)")
+
     print(f" {model.count_parameters()/1e6:.2f} M parameters")
+
 
     def train_model(data_loader):
         train_EFE = 0.
