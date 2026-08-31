@@ -211,13 +211,14 @@ def forward(params, tokens, training, key):
     x = params['embed']['word'][tokens]                   # (B, S, D)
     x = x + params['embed']['pos'][None, :S, :]          # (B, S, D)
 
-    # NO residual connections — matches NGC-PC default use_residual=False.
-    # Residuals would train weights calibrated for a different forward function,
-    # causing EFE explosion and NaN when transferred to the PC model.
+    # Residual connections match NGC-PC use_residual=True (config.py).
+    # With residuals, 4-layer backprop trains properly (PPL ~80-100 vs ~700
+    # without residuals). Weights can then meaningfully initialize NGC-PC.
     for block_params in params['blocks']:
         key, k_attn = jax.random.split(key)
-        x = attention_block(block_params, x, training, k_attn)  # no skip
-        x = mlp_block(block_params, x)                          # no skip
+        x = x + attention_block(block_params, x, training, k_attn)  # skip connection
+        x = x + mlp_block(block_params, x)                          # skip connection
+
 
     # Output logits
     logits = x @ params['out']['W'] + params['out']['b']  # (B, S, V)
