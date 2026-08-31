@@ -66,6 +66,14 @@ BACKPROP_CKPT = Path("exp_backprop") / "best_params.npz"    # trained by backpro
 NGC_SAVE_DIR  = "exp"                                        # standard NGC-PC save directory
 NGC_MODEL_NAME = "ngc_transformer"
 
+# Scale factor applied to all transferred weight matrices.
+# Backprop-optimised weights produce error signals that are too large for the
+# PC Hebbian dynamics even after clipping to [wlb, wub].  Scaling them down
+# to ~20 % preserves the directional structure learned by backprop while
+# keeping the initial EFE in the same range as a random NGC-PC init.
+# Set to 1.0 to disable scaling.
+TRANSFER_SCALE = 0.20
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper: verify shape compatibility before transferring
@@ -102,13 +110,18 @@ def load_backprop_checkpoint(path):
     for k in data.files:
         v = jnp.array(data[k])
         # Only clip weight matrices (not biases — biases stay at 0 initially)
-        if not k.endswith(('/b_q', '/b_k', '/b_v', '/b_o',
-                            '/b_mlp1', '/b_mlp2', 'out/b')):
+        is_bias = k.endswith(('/b_q', '/b_k', '/b_v', '/b_o',
+                               '/b_mlp1', '/b_mlp2', 'out/b'))
+        if not is_bias:
+            # 1. Clip to hard NGC-PC bounds
             v = jnp.clip(v, wlb, wub)
+            # 2. Scale down so initial PC error signals are in a sane range
+            v = v * TRANSFER_SCALE
         params[k] = v
 
     print(f"[transfer] Loaded backprop checkpoint: {path}")
-    print(f"           {len(params)} weight tensors  (clipped to [{wlb:.4f}, {wub:.4f}])")
+    print(f"           {len(params)} weight tensors")
+    print(f"           clipped to [{wlb:.4f}, {wub:.4f}]  then scaled by {TRANSFER_SCALE}")
     return params
 
 
