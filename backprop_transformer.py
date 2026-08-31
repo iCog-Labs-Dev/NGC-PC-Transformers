@@ -78,11 +78,18 @@ SAVE_DIR.mkdir(exist_ok=True)
 # ─────────────────────────────────────────────────────────────────────────────
 # Weight Initialisation
 # ─────────────────────────────────────────────────────────────────────────────
+# NGC-PC weight bounds from config (wub=0.035, wlb=-0.073)
+# Weights must be initialised inside this range so Hebbian dynamics are stable.
+_WUB = config.wub   # 0.035284
+_WLB = config.wlb   # -0.073186
+
 def fan_in_gaussian(key, shape):
-    """Fan-in Gaussian init matching NGC-PC's dist.fan_in_gaussian()."""
+    """Fan-in Gaussian init scaled to NGC-PC's [wlb, wub] bounds."""
     fan_in = shape[0]
     std = 1.0 / jnp.sqrt(float(fan_in))
-    return jax.random.normal(key, shape) * std
+    w = jax.random.normal(key, shape) * std
+    # Clip to NGC-PC weight bounds so Hebbian dynamics stay stable after transfer
+    return jnp.clip(w, _WLB, _WUB)
 
 
 def init_params(key):
@@ -204,13 +211,13 @@ def forward(params, tokens, training, key):
     x = params['embed']['word'][tokens]                   # (B, S, D)
     x = x + params['embed']['pos'][None, :S, :]          # (B, S, D)
 
-    # Transformer blocks — no residual by default (matching use_residual=False)
-    # Note: standard transformers do use residual; we add residual here to match
-    # the mathematical function computed by the NGC-PC model at convergence.
+    # NO residual connections — matches NGC-PC default use_residual=False.
+    # Residuals would train weights calibrated for a different forward function,
+    # causing EFE explosion and NaN when transferred to the PC model.
     for block_params in params['blocks']:
         key, k_attn = jax.random.split(key)
-        x = x + attention_block(block_params, x, training, k_attn)
-        x = x + mlp_block(block_params, x)
+        x = attention_block(block_params, x, training, k_attn)  # no skip
+        x = mlp_block(block_params, x)                          # no skip
 
     # Output logits
     logits = x @ params['out']['W'] + params['out']['b']  # (B, S, V)

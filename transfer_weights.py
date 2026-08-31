@@ -85,6 +85,8 @@ def load_backprop_checkpoint(path):
     """
     Load the flat .npz checkpoint saved by backprop_transformer.py.
     Returns a dict keyed by the flat parameter names (e.g. 'blocks/0/W_q').
+    Weights are clipped to NGC-PC's [wlb, wub] bounds to prevent Hebbian
+    dynamics from exploding (NaN) during the first settling iterations.
     """
     if not Path(str(path)).exists():
         raise FileNotFoundError(
@@ -92,10 +94,23 @@ def load_backprop_checkpoint(path):
             "Run `python backprop_transformer.py` first."
         )
     data = np.load(str(path))
-    params = {k: jnp.array(data[k]) for k in data.files}
+
+    # Clip all weight tensors to NGC-PC's expected range
+    wlb = config.wlb  # -0.073186
+    wub = config.wub  #  0.035284
+    params = {}
+    for k in data.files:
+        v = jnp.array(data[k])
+        # Only clip weight matrices (not biases — biases stay at 0 initially)
+        if not k.endswith(('/b_q', '/b_k', '/b_v', '/b_o',
+                            '/b_mlp1', '/b_mlp2', 'out/b')):
+            v = jnp.clip(v, wlb, wub)
+        params[k] = v
+
     print(f"[transfer] Loaded backprop checkpoint: {path}")
-    print(f"           {len(params)} weight tensors")
+    print(f"           {len(params)} weight tensors  (clipped to [{wlb:.4f}, {wub:.4f}])")
     return params
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
