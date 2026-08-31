@@ -35,9 +35,19 @@ def main():
     data_loader = DataLoader(seq_len=seq_len, batch_size=batch_size)
     train_loader, valid_loader, _ = data_loader.load_and_prepare_data()
     
+    # loadDir="exp" loads pre-trained weights transferred by transfer_weights.py.
+    # Set loadDir=None to train from random initialisation instead.
+    pretrained_dir = "exp"
+    import os
+    loadDir = pretrained_dir if os.path.isdir(pretrained_dir) else None
+    if loadDir:
+        print(f"[train] Loading pre-trained weights from '{loadDir}/'")
+    else:
+        print("[train] No pre-trained weights found — starting from random init.")
+
     model = NGCTransformer(dkey, batch_size=batch_size, seq_len=seq_len, n_embed=n_embed, vocab_size=vocab_size, n_layers=n_layers, n_heads=n_heads,
                           T=T, dt=1., tau_m=tau_m , act_fx=act_fx, eta=eta, dropout_rate= dropout_rate, exp_dir="exp",
-                  loadDir= None, pos_learnable= pos_learnable, optim_type=optim_type, wub = wub, wlb= wlb, model_name="ngc_transformer", generate =False )
+                  loadDir=loadDir, pos_learnable= pos_learnable, optim_type=optim_type, wub = wub, wlb= wlb, model_name="ngc_transformer", generate =False )
 
     print(f" {model.count_parameters()/1e6:.2f} M parameters")
 
