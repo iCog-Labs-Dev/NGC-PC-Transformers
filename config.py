@@ -43,5 +43,13 @@ class Config:
 
     # set True to Use jax.lax.scan fused advance loop (faster, minor floating-point differences from the normal python loop)
     fused_advance = True
+
+    # Global toggle for residual (skip) connections in transformer blocks.
+    # Must be True for backprop pre-training to work well (prevents vanishing
+    # gradients across 4 layers). NGC-PC with use_residual=True also trains
+    # better and allows meaningful weight transfer from the backprop model.
+    use_residual = True
+
     # "tinyshakespeare", "ptb", "rottentomatoes" "wikitext2", "wikitext103", ""
     dataset = "tinyshakespeare"
+
