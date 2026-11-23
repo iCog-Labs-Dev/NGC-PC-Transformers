@@ -8,8 +8,11 @@ import jax.numpy as jnp
 from utils.model_util import d_softmax_vjp
 from utils.rope_utils import apply_rotary_emb, apply_rotary_emb_inv, precompute_freqs_cis_real
 
-@partial(jit, static_argnums=[6, 7, 8, 9, 10,11])
-def _compute_attention(Q, K, V, cos, sin, mask, n_heads, d_head, dropout_rate, seq_len, batch_size, use_rope,  key):
+DISABLE_ATTN_DROPOUT = False
+
+
+@partial(jit, static_argnums=[6, 7, 8, 9, 10, 11])
+def _compute_attention(Q, K, V, cos, sin, mask, n_heads, d_head, dropout_rate, seq_len, batch_size, use_rope, key):
     """
     Compute multi-head attention 
     """
@@ -42,7 +45,7 @@ def _compute_attention(Q, K, V, cos, sin, mask, n_heads, d_head, dropout_rate, s
     score = jax.nn.softmax(s_c, axis=-1)
     score = score.astype(q.dtype)
     
-    if dropout_rate > 0.0:
+    if dropout_rate > 0.0 and not DISABLE_ATTN_DROPOUT:
         dkey = random.fold_in(key, 0)
         # dkey = random.PRNGKey(0)
         score = jax.random.bernoulli(dkey, 1 - dropout_rate, score.shape) * score / (1 - dropout_rate)

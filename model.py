@@ -715,4 +715,100 @@ class NGCTransformer:
 
     def get_latents(self):
         return self.projection.q_out_Ratecell.z.get()
+
+    def get_logits(self):
+        """Returns raw pre-softmax output projection logits."""
+        return self.projection.Q_out.outputs.get()
+
+
+def build_model_from_config(
+    dkey=None,
+    cfg=None,
+    exp_dir=None,
+    loadDir=None,
+    model_name=None,
+    generate=False,
+    **overrides
+):
+    """
+    Single unified model-construction helper used across generation.py,
+    export_generation_weights.py, scripts/verify_real_checkpoint.py, and tests.
+    Passes position_encoding/rope_theta/pos_learnable identically to train.py.
+    """
+    if cfg is None:
+        from config import Config as cfg
+
+    if dkey is None:
+        seed = overrides.pop("seed", getattr(cfg, "SEED", 1234))
+        dkey = random.PRNGKey(seed)
+
+    batch_size = overrides.pop("batch_size", getattr(cfg, "batch_size", 1))
+    seq_len = overrides.pop("seq_len", getattr(cfg, "seq_len", 32))
+    n_embed = overrides.pop("n_embed", getattr(cfg, "n_embed", 128))
+    vocab_size = overrides.pop("vocab_size", getattr(cfg, "vocab_size", 11711))
+    n_layers = overrides.pop("n_layers", getattr(cfg, "n_layers", 4))
+    n_heads = overrides.pop("n_heads", getattr(cfg, "n_heads", 8))
+    n_iter = overrides.pop("T", overrides.pop("n_iter", getattr(cfg, "n_iter", 26)))
+    tau_m = overrides.pop("tau_m", getattr(cfg, "tau_m", 20))
+    act_fx = overrides.pop("act_fx", getattr(cfg, "act_fx", "identity"))
+    eta = overrides.pop("eta", getattr(cfg, "eta", 4.9e-6))
+    dropout_rate = overrides.pop("dropout_rate", 0.0 if generate else getattr(cfg, "dropout_rate", 0.1))
+    optim_type = overrides.pop("optim_type", getattr(cfg, "optim_type", "sgd"))
+    wub = overrides.pop("wub", getattr(cfg, "wub", 0.035))
+    wlb = overrides.pop("wlb", getattr(cfg, "wlb", -0.073))
+
+    dt = overrides.pop("dt", 1.0)
+    exp_dir = overrides.pop("exp_dir", exp_dir if exp_dir is not None else getattr(cfg, "exp_dir", "exp"))
+    loadDir = overrides.pop("loadDir", loadDir)
+    model_name = overrides.pop("model_name", model_name if model_name is not None else getattr(cfg, "model_name", "ngc_transformer"))
+    generate = overrides.pop("generate", generate)
+    if generate:
+        import utils.attention_utils as _au
+        _au.DISABLE_ATTN_DROPOUT = True
+
+    pos_learnable = overrides.pop("pos_learnable", getattr(cfg, "pos_learnable", False))
+    position_encoding = overrides.pop("position_encoding", getattr(cfg, "position_encoding", "positional"))
+    rope_theta = overrides.pop("rope_theta", getattr(cfg, "rope_theta", 10000.0))
+
+    extra_kwargs = {}
+    if position_encoding is not None:
+        extra_kwargs["position_encoding"] = position_encoding
+    if rope_theta is not None:
+        extra_kwargs["rope_theta"] = rope_theta
+    extra_kwargs.update(overrides)
+
+    model = NGCTransformer(
+        dkey=dkey,
+        batch_size=batch_size,
+        seq_len=seq_len,
+        n_embed=n_embed,
+        vocab_size=vocab_size,
+        n_layers=n_layers,
+        n_heads=n_heads,
+        T=n_iter,
+        dt=dt,
+        tau_m=tau_m,
+        act_fx=act_fx,
+        eta=eta,
+        dropout_rate=dropout_rate,
+        exp_dir=exp_dir,
+        loadDir=loadDir,
+        pos_learnable=pos_learnable,
+        optim_type=optim_type,
+        wub=wub,
+        wlb=wlb,
+        model_name=model_name,
+        generate=generate,
+        **extra_kwargs
+    )
+
+    # Record position encoding attributes on instance for explicit source-of-truth inspection
+    if not hasattr(model, "position_encoding"):
+        setattr(model, "position_encoding", position_encoding)
+    if not hasattr(model, "rope_theta"):
+        setattr(model, "rope_theta", rope_theta)
+    if not hasattr(model, "pos_learnable"):
+        setattr(model, "pos_learnable", pos_learnable)
+
+    return model
   

@@ -15,3 +15,7 @@ logs/
 /tuning
 /python3.11
 /exp
+/scratch
+*.npz
+generation_meta.json
+powershell.cmd

@@ -1,15 +1,17 @@
 import os
 import sys
+import time
+import argparse
+from pathlib import Path
+import numpy as np
 
 # MUST BE SET BEFORE ANY JAX/TENSORFLOW IMPORTS
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-os.environ['XLA_FLAGS'] = '--xla_gpu_autotune_level=0 --xla_gpu_strict_conv_algorithm_picker=false --xla_cpu_use_thunk_runtime=false'
-os.environ['TF_GPU_ALLOCATOR'] = 'cuda_malloc_async'
-os.environ['JAX_PLATFORM_NAME'] = 'gpu'
-os.environ['JAX_ENABLE_X64'] = 'False'
+os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
+os.environ.setdefault('XLA_FLAGS', '--xla_gpu_autotune_level=0 --xla_gpu_strict_conv_algorithm_picker=false --xla_cpu_use_thunk_runtime=false')
+os.environ.setdefault('TF_GPU_ALLOCATOR', 'cuda_malloc_async')
+os.environ.setdefault('JAX_ENABLE_X64', 'False')
 
 # Redirect stderr to suppress XLA warnings
-import sys
 stderr = sys.stderr
 sys.stderr = open(os.devnull, 'w')
 
@@ -18,34 +20,51 @@ warnings.filterwarnings('ignore')
 
 # Now import JAX and other libraries
 import jax
-jax.config.update('jax_platform_name', 'gpu')
+if 'JAX_PLATFORM_NAME' in os.environ:
+    jax.config.update('jax_platform_name', os.environ['JAX_PLATFORM_NAME'])
 jax.config.update('jax_log_compiles', False)
 
 # Restore stderr after JAX initialization
 sys.stderr = stderr
 
-from pathlib import Path
 _REPO_ROOT = str(Path(__file__).resolve().parent)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from model import NGCTransformer
 import jax.numpy as jnp
-import numpy as np
 from config import Config as config
-from data_preprocess.data_loader import DataLoader
 from data_preprocess.tokenizer import get_tokenizer, BPETokenizer, CharacterTokenizer
-from pathlib import Path
-import re
-import textwrap
+from inference.decoder import load_weights, generate as fast_generate, sample
 
 
+def setup_tokenizer():
+    """Load and initialize the tokenizer configured in config.py."""
+    tokenizer = get_tokenizer(config)
+    if isinstance(tokenizer, BPETokenizer) and tokenizer.tokenizer is None:
+        vocab_file = getattr(config, "tokenizer_vocab_file", None)
+        if vocab_file is None:
+            from data_preprocess.datasets_registry import prepare_dataset
+            _, output_dir = prepare_dataset(config.dataset)
+            default_path = output_dir / "tokenizer" / "bpe_tokenizer.json"
+            if default_path.exists():
+                vocab_file = str(default_path)
+                print(f"Auto-loading BPE tokenizer from default path: {vocab_file}")
+
+        if vocab_file and Path(vocab_file).exists():
+            tokenizer.load_tokenizer(vocab_file)
+            print(f"Loaded BPE tokenizer (vocab size: {tokenizer.get_vocab_size()})")
+        else:
+            raise RuntimeError(
+                "BPE tokenizer not trained or loaded!\n"
+                "Run `python data_preprocess/tokenizer.py` first to train/tokenize."
+            )
+    return tokenizer
 
 
-
-def generate_text(
+def generate_text_legacy(
     model,
     tokenizer,
+    prompt: str = "",
     max_new_tokens: int = 200,
     seq_len: int = config.seq_len,
     temperature: float = 1.0,
@@ -54,8 +73,10 @@ def generate_text(
     pad_token_id: int = None
 ):
     """
-    Generate text using the model and provided tokenizer.
-    Works with both custom BPE,character and tiktoken backends.
+    Legacy generation loop using NGCTransformer.process().
+    Maintains exact original sliding-window semantics with bugfix for temperature scaling:
+    projection output is softmax probabilities from q_target_Ratecell, so temperature
+    is applied to log(probs + 1e-9) / temperature.
     """
     if pad_token_id is None:
         if isinstance(tokenizer, BPETokenizer) and tokenizer.tokenizer is not None:
@@ -75,128 +96,236 @@ def generate_text(
     if start_token_id is None:
         start_token_id = pad_token_id
 
-    # Initialize sequence with start token ID
-    current_tokens = jnp.array([[start_token_id]], dtype=jnp.int32)
+    # Initialize sequence with prompt or start token ID
+    if prompt:
+        encoded = tokenizer.encode(prompt)
+        input_ids = encoded.ids if hasattr(encoded, "ids") else list(encoded)
+        if len(input_ids) == 0:
+            input_ids = [start_token_id]
+    else:
+        input_ids = [start_token_id]
+
+    tokens_list = list(input_ids)
     current_key = key
 
     for _ in range(max_new_tokens):
         # Truncate context to fit model's seq_len
-        if current_tokens.shape[1] > config.seq_len:
-            input_seq = current_tokens[:, -config.seq_len:]
+        if len(tokens_list) > config.seq_len:
+            sub = tokens_list[-config.seq_len:]
         else:
-            input_seq = current_tokens
+            sub = tokens_list
 
-        # Pad to exactly seq_len if needed
-        if input_seq.shape[1] < config.seq_len:
-            pad_len = config.seq_len - input_seq.shape[1]
-            input_seq = jnp.pad(input_seq, ((0, 0), (0, pad_len)), constant_values=pad_token_id)
-        
+        cur_arr = jnp.array([sub], dtype=jnp.int32)
+        if cur_arr.shape[1] < config.seq_len:
+            pad_len = config.seq_len - cur_arr.shape[1]
+            input_seq = jnp.pad(cur_arr, ((0, 0), (0, pad_len)), constant_values=pad_token_id)
+        else:
+            input_seq = cur_arr
+
         # Forward pass (no target clamping during inference)
         dummy_target = jnp.zeros((config.batch_size * config.seq_len, config.vocab_size))
+        y_mu_inf, _, _ = model.process(input_seq, dummy_target, adapt_synapses=False)
 
-        # Forward pass
+        # Extract pre-softmax logits directly from the projection layer
+        if hasattr(model, "get_logits"):
+            logits_2d = model.get_logits()
+        elif hasattr(model, "projection") and hasattr(model.projection, "Q_out"):
+            logits_2d = model.projection.Q_out.outputs.get()
+        else:
+            logits_2d = jnp.log(y_mu_inf + 1e-9)
 
-        y_mu_inf, y_mu, _ = model.process(input_seq, dummy_target, adapt_synapses=False)
-        logits = y_mu_inf.reshape(config.batch_size, config.seq_len, config.vocab_size)
+        logits_3d = logits_2d.reshape(config.batch_size, config.seq_len, config.vocab_size)
 
         # Get logits for the last *real* token (excluding padding)
-        if current_tokens.shape[1] > config.seq_len:
+        if len(tokens_list) > config.seq_len:
             last_pos = config.seq_len - 1
         else:
-            last_pos = current_tokens.shape[1] - 1
-        next_logits = logits[0, last_pos, :] / temperature
+            last_pos = len(tokens_list) - 1
+        last_logits = logits_3d[0, last_pos, :]
 
-        # Sample or take argmax
         if current_key is not None:
-            if top_k is not None and top_k > 0:
-                top_k = min(top_k, config.vocab_size)
-                top_vals, top_idx = jax.lax.top_k(next_logits, k=top_k)
-                probs = top_vals
-                current_key, subkey = jax.random.split(current_key)
-                choice = jax.random.choice(subkey, a=top_k, p=probs)
-                next_token = top_idx[choice]
-            else:
-                probs = next_logits
-                current_key, subkey = jax.random.split(current_key)
-                next_token = jax.random.choice(subkey, a=config.vocab_size, p=probs)
+            current_key, subkey = jax.random.split(current_key)
         else:
-            next_token = jnp.argmax(next_logits)
+            subkey = None
 
-        # Append new token
-        current_tokens = jnp.concatenate([current_tokens, next_token[None, None]], axis=1)
+        next_token = sample(last_logits, key=subkey, temperature=temperature, top_k=top_k)
+        tokens_list.append(next_token)
 
     # Decode generated IDs back to text
-    generated_ids = current_tokens[0].tolist()
-    return tokenizer.decode(generated_ids)
+    return tokenizer.decode(tokens_list)
 
 
-# Initialize the model and tokenizer only when run as a script
-if __name__ == "__main__":
-    # Initialize the model
-    dkey = jax.random.PRNGKey(0)
-    model = NGCTransformer(
-        dkey, 
-        batch_size=config.batch_size,
-        seq_len=config.seq_len, 
-        n_embed=config.n_embed, 
-        vocab_size=config.vocab_size, 
-        n_layers=config.n_layers, 
-        n_heads=config.n_heads,
-        T=config.n_iter, 
-        dt=1., 
-        tau_m=config.tau_m, 
-        act_fx=config.act_fx, 
-        eta=config.eta, 
-        dropout_rate=config.dropout_rate, 
-        exp_dir=config.exp_dir,
-        loadDir=config.exp_dir, # Ensure model is loaded from trained exp/ directory
-        position_encoding=config.position_encoding,
-        pos_learnable=config.pos_learnable,
-        rope_theta=config.rope_theta,
-        optim_type=config.optim_type, 
-        wub=config.wub, 
-        wlb=config.wlb, 
-        model_name="ngc_transformer",
-        generate= True
-    )
+# Backward-compatibility alias
+generate_text = generate_text_legacy
 
-    # Optional: add custom weight stats here if needed
 
-    tokenizer = get_tokenizer(config)
+def benchmark_generation(gen_fn, num_runs=3):
+    """
+    Run generation with an initial warmup pass (capturing JIT compilation overhead),
+    followed by `num_runs` timed passes for pure inference throughput.
+    """
+    print("  Warmup run (compiling JIT graphs)...", end="", flush=True)
+    t_warm_0 = time.perf_counter()
+    warm_text, warm_tokens = gen_fn()
+    t_warm_1 = time.perf_counter()
+    jit_time = t_warm_1 - t_warm_0
+    print(f" done in {jit_time:.3f}s")
 
-    if isinstance(tokenizer, BPETokenizer) and tokenizer.tokenizer is None:
-        vocab_file = getattr(config, "tokenizer_vocab_file", None)
-        if vocab_file is None:
-            # default_path = Path(__file__).parent / "data_preprocess" / "outputs" / "tokenizer" / "bpe_tokenizer.json"
-            from data_preprocess.datasets_registry import prepare_dataset
-            _, output_dir = prepare_dataset(config.dataset)
-            default_path = output_dir / "tokenizer" / "bpe_tokenizer.json"
-            if default_path.exists():
-                vocab_file = str(default_path)
-                print(f"Auto-loading BPE tokenizer from default path: {vocab_file}")
+    durations = []
+    tokens_per_sec = []
+    text_out = warm_text
 
-        # Attempt to load
-        if vocab_file and Path(vocab_file).exists():
-            tokenizer.load_tokenizer(vocab_file)
-            print(f"Loaded BPE tokenizer (vocab size: {tokenizer.get_vocab_size()})")
-        else:
-            raise RuntimeError(
-                "BPE tokenizer not trained or loaded!\n\n"
+    for r in range(num_runs):
+        t0 = time.perf_counter()
+        text_out, n_tok = gen_fn()
+        t1 = time.perf_counter()
+        dt = t1 - t0
+        tps = n_tok / max(dt, 1e-6)
+        durations.append(dt)
+        tokens_per_sec.append(tps)
+        print(f"  Run {r + 1}: {n_tok} tokens in {dt:.3f}s ({tps:.2f} tok/s)")
+
+    median_tps = float(np.median(tokens_per_sec))
+    min_tps = float(np.min(tokens_per_sec))
+    max_tps = float(np.max(tokens_per_sec))
+    print(f"\nBenchmark Summary ({num_runs} runs, excluding warmup):")
+    print(f"  JIT compile / Warmup time: {jit_time:.3f}s")
+    print(f"  Tokens/sec - Median: {median_tps:.2f} | Min: {min_tps:.2f} | Max: {max_tps:.2f}")
+    return text_out, median_tps, min_tps, max_tps
+
+
+def main():
+    parser = argparse.ArgumentParser(description="NGC Transformer Inference Generator")
+    parser.add_argument("--legacy", action="store_true", help="Use legacy NGCTransformer.process() generation loop")
+    parser.add_argument("--benchmark", action="store_true", help="Run 3+ benchmark passes and report tokens/sec")
+    parser.add_argument("--max-new-tokens", type=int, default=200, help="Number of new tokens to generate")
+    parser.add_argument("--temperature", type=float, default=0.8, help="Sampling temperature (0 for greedy)")
+    parser.add_argument("--top-k", type=int, default=50, help="Top-k filtering (0 to disable)")
+    parser.add_argument("--prompt", type=str, default="", help="Prompt text")
+    parser.add_argument("--weights", type=str, default="generation_weights.npz", help="Weights file for standalone decoder")
+    parser.add_argument("--meta", type=str, default="generation_meta.json", help="Meta JSON file for standalone decoder")
+    parser.add_argument("--exp-dir", type=str, default="exp", help="Checkpoint directory path")
+    parser.add_argument("--model-name", type=str, default="ngc_transformer", help="Model name")
+    parser.add_argument("--synthetic", action="store_true", help="Explicitly allow exporting synthetic random weights if weights/meta are missing (test only)")
+    parser.add_argument("--runs", type=int, default=3, help="Number of benchmark runs")
+    parser.add_argument("--seed", type=int, default=0, help="PRNG key seed")
+    parser.add_argument("--device", type=str, default=None, help="Device to use ('cpu', 'gpu', or auto-detect)")
+    args = parser.parse_args()
+
+    if args.device is not None:
+        jax.config.update("jax_platform_name", args.device)
+
+    tokenizer = setup_tokenizer()
+    rng = jax.random.PRNGKey(args.seed)
+
+    if args.legacy:
+        print("\n[Mode] Running LEGACY generation loop (NGCTransformer.process)...")
+        # Lazy import of model.py only when --legacy is requested
+        from model import build_model_from_config
+
+        model = build_model_from_config(
+            seed=args.seed,
+            exp_dir=args.exp_dir,
+            loadDir=args.exp_dir,
+            model_name=args.model_name,
+            generate=True
+        )
+
+        def run_legacy():
+            key = None
+            if args.temperature > 0.0:
+                _, k = jax.random.split(rng)
+                key = k
+            text = generate_text_legacy(
+                model=model,
+                tokenizer=tokenizer,
+                prompt=args.prompt,
+                max_new_tokens=args.max_new_tokens,
+                temperature=args.temperature,
+                top_k=args.top_k,
+                key=key,
             )
+            return text, args.max_new_tokens
 
-    rng = jax.random.PRNGKey(0)
-    rng, key_1 = jax.random.split(rng)
-    rng, key_2 = jax.random.split(rng)
+        if args.benchmark:
+            print(f"\nBenchmarking legacy generator over {args.runs} runs ({args.max_new_tokens} tokens each)...")
+            output, _, _, _ = benchmark_generation(run_legacy, num_runs=args.runs)
+        else:
+            output, _ = run_legacy()
 
-    print("\nFINAL GENERATED 1:\n")
-    generated_1 = generate_text(
-        model,
-        tokenizer,
-        max_new_tokens=200,
-        temperature=0.8,
-        top_k=50,
-        key=key_1,
-    )
-    print(generated_1)
+        print("\nFINAL GENERATED (LEGACY):\n")
+        print(output)
 
-    
+    else:
+        print("\n[Mode] Running FAST STANDALONE decoder...")
+        weights_path = Path(args.weights)
+        meta_path = Path(args.meta)
+        if not weights_path.exists() or not meta_path.exists():
+            from export_generation_weights import export_weights
+            if args.synthetic:
+                print("\n" + "!" * 75)
+                print("[WARNING] --synthetic flag was explicitly passed: EXPORTING UNTRAINED RANDOM WEIGHTS!")
+                print("Generated text will be completely untrained gibberish.")
+                print("!" * 75 + "\n")
+                export_weights(
+                    checkpoint_dir=args.exp_dir,
+                    model_name=args.model_name,
+                    output_npz=str(weights_path),
+                    output_meta=str(meta_path),
+                    use_synthetic=True,
+                    device=args.device
+                )
+            else:
+                cp_dir = Path(args.exp_dir)
+                has_checkpoint = False
+                if cp_dir.exists() and cp_dir.is_dir():
+                    has_checkpoint = any(cp_dir.glob("**/*.npz")) or any(cp_dir.glob("**/circuit.json"))
+                if not has_checkpoint:
+                    raise FileNotFoundError(
+                        f"Cannot auto-export generation weights: checkpoint directory '{args.exp_dir}' "
+                        f"does not exist or contains no saved checkpoint files.\n"
+                        f"To generate text with a trained model, please train a checkpoint first (via train.py) "
+                        f"or specify an existing checkpoint directory with --exp-dir.\n"
+                        f"(If you only want to test the pipeline with random weights, explicitly pass --synthetic.)"
+                    )
+                print(f"Standalone weights not found. Exporting from checkpoint at '{args.exp_dir}'...")
+                export_weights(
+                    checkpoint_dir=args.exp_dir,
+                    model_name=args.model_name,
+                    output_npz=str(weights_path),
+                    output_meta=str(meta_path),
+                    use_synthetic=False,
+                    device=args.device
+                )
+
+        params, meta = load_weights(str(weights_path), str(meta_path))
+
+        def run_fast():
+            key = None
+            if args.temperature > 0.0:
+                _, k = jax.random.split(rng)
+                key = k
+            text = fast_generate(
+                params=params,
+                meta=meta,
+                tokenizer=tokenizer,
+                prompt=args.prompt,
+                max_new_tokens=args.max_new_tokens,
+                temperature=args.temperature,
+                top_k=args.top_k,
+                key=key,
+            )
+            return text, args.max_new_tokens
+
+        if args.benchmark:
+            print(f"\nBenchmarking fast standalone decoder over {args.runs} runs ({args.max_new_tokens} tokens each)...")
+            output, _, _, _ = benchmark_generation(run_fast, num_runs=args.runs)
+        else:
+            output, _ = run_fast()
+
+        print("\nFINAL GENERATED (FAST DECODER):\n")
+        print(output)
+
+
+if __name__ == "__main__":
+    main()
